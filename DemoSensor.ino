@@ -99,11 +99,10 @@ void MqttSetup() {
 void setup() {
   mac_str = WiFi.macAddress();
   Wire.begin(SDA, SCL);
-  init_sensors();
   Serial.begin(115200);
   Serial.println();
   Serial.println();
-  Serial.println("Waiting 1 sec...");
+  init_sensors();
   wifiManager.autoConnect();
   MqttSetup();
 }
@@ -119,11 +118,13 @@ void loop() {
 }
 
 void init_sensors() {
-  init_bme680();  
+  init_bme680();
+  init_bh1750();
 }
 
 void read_sensors() {
   read_bme680();  
+  read_bh1750();  
 }
 
 
@@ -157,17 +158,6 @@ void read_bme680() {
         "pres", bme680.pressure / 100.0,
         "gas", bme680.gas_resistance / 1000.0
       );
-      //create some variables to store the color data in
-      /*
-      Serial.print("Temp: ");
-      Serial.print(val);
-      Serial.print(" Humi: ");
-      Serial.print(val2);
-      Serial.print(" Gas: ");
-      Serial.print(val3);
-      Serial.print(" Pressure: ");
-      Serial.println(bme.pressure / 100.0);
-      */
     }
   }
 }
@@ -177,6 +167,7 @@ void init_bh1750() {
   bh1750.begin(BH1750_CONTINUOUS_HIGH_RES_MODE);
   uint16_t lux = bh1750.readLightLevel();
   if (lux >= 0 && lux < 54612) {
+    bh1750_ok = 1;
     Serial.print(F("found, "));
     Serial.print(lux);
     Serial.println(F(" lx"));
@@ -211,7 +202,7 @@ void SendDataToMQTT(char const sensor[],
    * If you set typeX argument empty (""), if will be left out from the payload.
    */
   /* 
-   *  NOTE!!!!!!!!!!
+   *  NOTE!
    *  For some weird reason / bug json message to be send can't exceed 106 bytes.
    *  Check that message size is at most 106 B.
    */
@@ -224,9 +215,9 @@ void SendDataToMQTT(char const sensor[],
   root["mac"] = mac_str;
   JsonObject& data = root.createNestedObject("data");
   if (type1[0] != 0) { data[type1] = val1; }
-  if (type1[1] != 0) { data[type2] = val2; }
-  if (type1[2] != 0) { data[type3] = val3; }
-  if (type1[3] != 0) { data[type4] = val4; }
+  if (type2[0] != 0) { data[type2] = val2; }
+  if (type3[0] != 0) { data[type3] = val3; }
+  if (type4[0] != 0) { data[type4] = val4; }
   root.printTo(jsonChar);
   Serial.println(jsonChar);
   client.publish(MQTT_TOPIC, jsonChar);
