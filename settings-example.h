@@ -15,3 +15,5 @@
 
 #define APDS9960_SEND_DELAY 1000  // milliseconds
 
+#define SI7021_SEND_DELAY 1000  // milliseconds
+

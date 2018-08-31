@@ -29,6 +29,7 @@
 #include "Adafruit_BME680.h"
 #include <BH1750.h>               // https://github.com/claws/BH1750
 #include <SparkFun_APDS9960.h>
+#include "SparkFun_Si7021_Breakout_Library.h"  // https://github.com/sparkfun/Si7021_Breakout
 
 // I2C settings
 #define SDA     D2
@@ -68,6 +69,11 @@ float mlx90614_object_temp = -273.15;
 SparkFun_APDS9960 apds9960 = SparkFun_APDS9960();
 uint8_t apds9960_ok = 0;
 uint32_t apds9960_lastRead = 0;
+
+// Si7021 temperature and humidity sensor
+Weather si7021;
+uint8_t si7021_ok = 0;
+uint32_t si7021_lastRead = 0;
 
 
 float round_float(float val) {
@@ -133,6 +139,7 @@ void init_sensors() {
   init_bh1750();
   init_mlx90614();
   init_apds9960();
+  init_si7021();
 }
 
 void read_sensors() {
@@ -140,6 +147,7 @@ void read_sensors() {
   read_bh1750();  
   read_mlx90614();
   read_apds9960();
+  read_si7021();
 }
 
 
@@ -264,6 +272,32 @@ void read_apds9960() {
       "g", g,
       "b", b,
       "a", a
+    );
+  }
+}
+
+void init_si7021() {
+  Serial.print(F("INIT Si7021: "));
+  si7021.begin();
+  float humidity = si7021.getRH();
+  if (humidity > 0.0 && humidity <= 150.0) {
+    // Serial.println(F("found"));
+    si7021_ok = 1;
+  } else {
+    // Serial.println(F("not found"));
+  }
+}
+
+void read_si7021() {
+  if ((si7021_ok == 1) && (millis() > (si7021_lastRead + SI7021_SEND_DELAY))) {
+    si7021_lastRead = millis();
+    float humidity = round_float(si7021.getRH());
+    float temp = round_float(si7021.getTemp());
+    SendDataToMQTT("si7021",
+      "temp", temp,
+      "humi", humidity,
+      "", 0,
+      "", 0
     );
   }
 }
