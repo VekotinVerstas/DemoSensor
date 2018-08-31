@@ -11,3 +11,5 @@
 
 #define BH1750_SEND_DELAY 1000  // milliseconds
 
+#define MLX90614_SEND_DELAY 1000  // milliseconds
+

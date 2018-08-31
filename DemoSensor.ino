@@ -62,6 +62,11 @@ uint8_t bh1750_ok = 0;
 uint32_t bh1750_lastRead = 0;
 uint16_t bh1750_lux = -1;
 
+// MLX90614 IR thermometer
+uint8_t mlx90614_ok = 0;
+uint32_t mlx90614_lastRead = 0;
+float mlx90614_ambient_temp = -273.15;
+float mlx90614_object_temp = -273.15;
 
 
 void MqttSetup() {
@@ -120,11 +125,13 @@ void loop() {
 void init_sensors() {
   init_bme680();
   init_bh1750();
+  init_mlx90614();
 }
 
 void read_sensors() {
   read_bme680();  
   read_bh1750();  
+  read_mlx90614();
 }
 
 
@@ -184,6 +191,34 @@ void read_bh1750() {
     SendDataToMQTT("bh1750", 
       "lux", lux,
       "", 0,
+      "", 0,
+      "", 0
+    );
+  }
+}
+
+void init_mlx90614() {
+  Serial.print(F("INIT MLX90614: "));
+  mlx90614_object_temp = readObjectTempC(0x5A);
+  if (mlx90614_object_temp >= -270 && mlx90614_object_temp < 1000) {
+    mlx90614_ok = 1;
+    Serial.print(F("found, "));
+    Serial.print(mlx90614_object_temp);
+    Serial.println(F(" 'C"));
+  } else {
+    Serial.println(F("not found"));
+  }
+}
+
+void read_mlx90614() {
+  // Read BH1750 if it has been initialised successfully and it is time to read it
+  if ((mlx90614_ok == 1) && (millis() > (mlx90614_lastRead + MLX90614_SEND_DELAY))) {
+    mlx90614_object_temp = readObjectTempC(0x5A);
+    mlx90614_ambient_temp = readAmbientTempC(0x5A);
+    mlx90614_lastRead = millis();
+    SendDataToMQTT("mlx90614", 
+      "obtemp", mlx90614_object_temp,
+      "amtemp", mlx90614_ambient_temp,
       "", 0,
       "", 0
     );
