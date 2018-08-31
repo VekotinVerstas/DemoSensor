@@ -17,3 +17,5 @@
 
 #define SI7021_SEND_DELAY 1000  // milliseconds
 
+#define BME280_SEND_DELAY 1000 // milliseconds
+

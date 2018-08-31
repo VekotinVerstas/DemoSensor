@@ -6,13 +6,16 @@
    The idea is to read all supported I2C and other sensors and send the data frequently
    to the server.
    This sketch supports (or will support) sensors listed below:
-   - BME680 temp, humidity, pressure, VOC sensor
    - BME280 temp, humidity, pressure sensor
+   - BME680 temp, humidity, pressure, VOC sensor
    - BH1750 LUX meter
    - APDS-9960 gesture / rgb light sensor
    - MLX90614 IR thermometer
    - Si7021 temperature / humidity sensor
+   TODO:
    - a button or any device which creates interrupts
+   - APDS-9960 gestures
+   - Dallas DS18B20
  **************************************************************************************/
 
 #include "settings.h"
@@ -26,6 +29,7 @@
 
 // Sensor support libraries
 #include <Adafruit_Sensor.h>
+#include <Adafruit_BME280.h>
 #include "Adafruit_BME680.h"
 #include <BH1750.h>               // https://github.com/claws/BH1750
 #include <SparkFun_APDS9960.h>
@@ -75,6 +79,10 @@ Weather si7021;
 uint8_t si7021_ok = 0;
 uint32_t si7021_lastRead = 0;
 
+// BME280 sensor
+Adafruit_BME280 bme280;
+uint8_t bme280_ok = 0;
+uint32_t bme280_lastRead = 0;
 
 float round_float(float val) {
   // Return val rounded to 2 decimals
@@ -135,6 +143,7 @@ void loop() {
 }
 
 void init_sensors() {
+  init_bme280();
   init_bme680();
   init_bh1750();
   init_mlx90614();
@@ -143,6 +152,7 @@ void init_sensors() {
 }
 
 void read_sensors() {
+  read_bme280();
   read_bme680();  
   read_bh1750();  
   read_mlx90614();
@@ -150,6 +160,31 @@ void read_sensors() {
   read_si7021();
 }
 
+void init_bme280() {
+  Serial.print(F("INIT BME280: "));
+  if (bme280.begin(0x76)) {
+    Serial.println(F("found"));
+    bme280_ok = 1;
+  } else {
+    Serial.println(F("not found"));
+  }
+}
+
+void read_bme280() {
+  // Read BME280 if it has been initialised successfully and it is time to read it
+  if ((bme280_ok == 1) && (millis() > (bme280_lastRead + BME280_SEND_DELAY))) {
+    bme280_lastRead = millis();
+    float humidity = round_float(bme280.readHumidity());
+    if (humidity > 0.0) {
+      SendDataToMQTT("bme280", 
+        "temp", bme280.readTemperature(),
+        "humi", humidity,
+        "pres", bme280.readPressure() / 100.0F,
+        "", 0
+      );
+    }
+  }
+}
 
 void init_bme680() {
   Serial.print(F("INIT BME680: "));
@@ -330,6 +365,8 @@ void SendDataToMQTT(char const sensor[],
   if (type3[0] != 0) { data[type3] = val3; }
   if (type4[0] != 0) { data[type4] = val4; }
   root.printTo(jsonChar);
+  Serial.print(MQTT_TOPIC);
+  Serial.print(" ");
   Serial.println(jsonChar);
   client.publish(MQTT_TOPIC, jsonChar);
 }
