@@ -28,6 +28,7 @@
 #include <Adafruit_Sensor.h>
 #include "Adafruit_BME680.h"
 #include <BH1750.h>               // https://github.com/claws/BH1750
+#include <SparkFun_APDS9960.h>
 
 // I2C settings
 #define SDA     D2
@@ -62,6 +63,11 @@ uint8_t mlx90614_ok = 0;
 uint32_t mlx90614_lastRead = 0;
 float mlx90614_ambient_temp = -273.15;
 float mlx90614_object_temp = -273.15;
+
+// APDS9960 RGB and gesture sensor
+SparkFun_APDS9960 apds9960 = SparkFun_APDS9960();
+uint8_t apds9960_ok = 0;
+uint32_t apds9960_lastRead = 0;
 
 
 float round_float(float val) {
@@ -126,12 +132,14 @@ void init_sensors() {
   init_bme680();
   init_bh1750();
   init_mlx90614();
+  init_apds9960();
 }
 
 void read_sensors() {
   read_bme680();  
   read_bh1750();  
   read_mlx90614();
+  read_apds9960();
 }
 
 
@@ -225,6 +233,40 @@ void read_mlx90614() {
   }
 }
 
+/*
+ * NOTE: Arduino/libraries/SparkFun_APDS9960_RGB_and_Gesture_Sensor/src/SparkFun_APDS9960.h
+ * conflicts with ESP8266WiFi and you must change NA_STATE --> N_A_STATE in SparkFun_APDS9960.h
+ */
+void init_apds9960() {
+  Serial.print(F("INIT APDS9960: "));
+  bool init_ok = apds9960.init(); // For some reason this may return false
+  if (apds9960.enableLightSensor(false)) {
+    Serial.println(F("found"));
+      apds9960_ok = 1;
+  } else {
+    Serial.println(F("not found"));
+  }
+}
+
+void read_apds9960() {
+  if ((apds9960_ok == 1) && (millis() > (apds9960_lastRead + APDS9960_SEND_DELAY))) {
+    apds9960_lastRead = millis();
+    uint16_t r, g, b, a;
+    if (  !apds9960.readAmbientLight(a) ||
+          !apds9960.readRedLight(r) ||
+          !apds9960.readGreenLight(g) ||
+          !apds9960.readBlueLight(b) ) {
+      Serial.println("Error reading light values");
+      return;
+    }
+    SendDataToMQTT("apds9960",
+      "r", r,
+      "g", g,
+      "b", b,
+      "a", a
+    );
+  }
+}
 
 
 void SendDataToMQTT(char const sensor[], 

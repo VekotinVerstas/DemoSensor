@@ -1,5 +1,5 @@
 // MQTT settings
-#define MQTT_TOPIC "esine"
+#define MQTT_TOPIC "demosensor"
 #define MQTT_SERVER "mqtt.example.org"
 #define MQTT_PORT 1883
 #define MQTT_USER "mqtt_user_with_read-write_permission_to_topic"
@@ -12,4 +12,6 @@
 #define BH1750_SEND_DELAY 1000  // milliseconds
 
 #define MLX90614_SEND_DELAY 1000  // milliseconds
+
+#define APDS9960_SEND_DELAY 1000  // milliseconds
 
