@@ -38,16 +38,11 @@ void callback(char* topic, byte* payload, unsigned int length) {
   // Serial.println(payload);
 }
 
-
 // Define and set up all variables / objects
 WiFiClient wifiClient;
 WiFiManager wifiManager;
 PubSubClient client(MQTT_SERVER, 1883, callback, wifiClient);
 String mac_str;
-
-// bool wifiReconnect = false;
-
-uint32_t lastMsgTime = 0;
 
 /* Sensor variables */
 
@@ -68,6 +63,11 @@ uint32_t mlx90614_lastRead = 0;
 float mlx90614_ambient_temp = -273.15;
 float mlx90614_object_temp = -273.15;
 
+
+float round_float(float val) {
+  // Return val rounded to 2 decimals
+  return (int)(val * 100 + 0.5) / 100.0;
+}
 
 void MqttSetup() {
   if (WiFi.status() != WL_CONNECTED) {
@@ -213,8 +213,8 @@ void init_mlx90614() {
 void read_mlx90614() {
   // Read BH1750 if it has been initialised successfully and it is time to read it
   if ((mlx90614_ok == 1) && (millis() > (mlx90614_lastRead + MLX90614_SEND_DELAY))) {
-    mlx90614_object_temp = readObjectTempC(0x5A);
-    mlx90614_ambient_temp = readAmbientTempC(0x5A);
+    mlx90614_object_temp = round_float(readObjectTempC(0x5A));
+    mlx90614_ambient_temp = round_float(readAmbientTempC(0x5A));
     mlx90614_lastRead = millis();
     SendDataToMQTT("mlx90614", 
       "obtemp", mlx90614_object_temp,
