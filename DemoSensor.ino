@@ -84,9 +84,9 @@ Adafruit_BME280 bme280;
 uint8_t bme280_ok = 0;
 uint32_t bme280_lastRead = 0;
 
-float round_float(float val) {
-  // Return val rounded to 2 decimals
-  return (int)(val * 100 + 0.5) / 100.0;
+float round_float(float val, int dec) {
+  // Return val rounded to dec decimals
+  return (int)(val * pow(10,dec) + 0.5) / 1.0 / pow(10,dec);
 }
 
 void MqttSetup() {
@@ -174,12 +174,14 @@ void read_bme280() {
   // Read BME280 if it has been initialised successfully and it is time to read it
   if ((bme280_ok == 1) && (millis() > (bme280_lastRead + BME280_SEND_DELAY))) {
     bme280_lastRead = millis();
-    float humidity = round_float(bme280.readHumidity());
+    float humidity = round_float(bme280.readHumidity(), 1);
+    float temp = round_float(bme280.readTemperature(), 1);
+    float pres = round_float(bme280.readPressure() / 100.0F, 1);
     if (humidity > 0.0) {
       SendDataToMQTT("bme280", 
-        "temp", bme280.readTemperature(),
+        "temp", temp,
         "humi", humidity,
-        "pres", bme280.readPressure() / 100.0F,
+        "pres", pres,
         "", 0
       );
     }
@@ -210,11 +212,16 @@ void read_bme680() {
       return;
     } else {
       bme680_lastRead = millis();
+      float humidity = round_float(bme680.humidity, 1);
+      float temp = round_float(bme680.temperature, 2);
+      float pres = round_float(bme680.pressure / 100.0F, 2);
+      float gas = round_float(bme680.gas_resistance / 1000.0F, 1);
+      
       SendDataToMQTT("bme680", 
-        "temp", bme680.temperature,
-        "humi", bme680.humidity,
-        "pres", bme680.pressure / 100.0,
-        "gas", bme680.gas_resistance / 1000.0
+        "temp", temp,
+        "humi", humidity,
+        "pres", pres,
+        "gas", gas
       );
     }
   }
@@ -264,8 +271,8 @@ void init_mlx90614() {
 void read_mlx90614() {
   // Read BH1750 if it has been initialised successfully and it is time to read it
   if ((mlx90614_ok == 1) && (millis() > (mlx90614_lastRead + MLX90614_SEND_DELAY))) {
-    mlx90614_object_temp = round_float(readObjectTempC(0x5A));
-    mlx90614_ambient_temp = round_float(readAmbientTempC(0x5A));
+    mlx90614_object_temp = round_float(readObjectTempC(0x5A), 1);
+    mlx90614_ambient_temp = round_float(readAmbientTempC(0x5A), 1);
     mlx90614_lastRead = millis();
     SendDataToMQTT("mlx90614", 
       "obtemp", mlx90614_object_temp,
@@ -326,8 +333,8 @@ void init_si7021() {
 void read_si7021() {
   if ((si7021_ok == 1) && (millis() > (si7021_lastRead + SI7021_SEND_DELAY))) {
     si7021_lastRead = millis();
-    float humidity = round_float(si7021.getRH());
-    float temp = round_float(si7021.getTemp());
+    float humidity = round_float(si7021.getRH(), 1);
+    float temp = round_float(si7021.getTemp(), 1);
     SendDataToMQTT("si7021",
       "temp", temp,
       "humi", humidity,
@@ -349,11 +356,12 @@ void SendDataToMQTT(char const sensor[],
    */
   /* 
    *  NOTE!
-   *  For some weird reason / bug json message to be send can't exceed 106 bytes.
-   *  Check that message size is at most 106 B.
+   *  For some weird reason / bug MQTT topic + json message to be send can't exceed ~121 bytes!
+   *  Check that message size + topic are at most 120 B.
    */
   // Serial.println("SendDataToMQTT start");
   // StaticJsonBuffer<512> jsonBuffer;
+  uint16_t msg_len = 0;
   DynamicJsonBuffer jsonBuffer(512);
   char jsonChar[256];
   JsonObject& root = jsonBuffer.createObject();
@@ -365,9 +373,15 @@ void SendDataToMQTT(char const sensor[],
   if (type3[0] != 0) { data[type3] = val3; }
   if (type4[0] != 0) { data[type4] = val4; }
   root.printTo(jsonChar);
+  msg_len = strlen(MQTT_TOPIC) + strlen(jsonChar);
+  Serial.print(msg_len);
+  Serial.print("B ");
   Serial.print(MQTT_TOPIC);
   Serial.print(" ");
   Serial.println(jsonChar);
+  if (msg_len > 120) {
+    Serial.print("Warning: TOPIC + JSON > 120 bytes.");
+  }
   client.publish(MQTT_TOPIC, jsonChar);
 }
 
