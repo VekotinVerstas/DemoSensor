@@ -128,7 +128,7 @@ void setup() {
   Serial.println();
   Serial.println();
   init_sensors();
-  wifiManager.autoConnect();
+  wifiManager.autoConnect(ESP_AP_NAME, ESP_AP_PW);
   MqttSetup();
 }
 
