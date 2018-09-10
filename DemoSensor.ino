@@ -58,33 +58,57 @@ String mac_str;
 Adafruit_BME680 bme680;
 uint8_t bme680_ok = 0;
 uint32_t bme680_lastRead = 0;
+uint32_t bme680_lastSend = 0;
+float bme680_lastTemp = -999;
+float bme680_lastHumi = -999;
+float bme680_lastPres = -999;
+float bme680_lastGas = -999;
 
 // BH1750 LUX sensor
 BH1750 bh1750(0x23);
 uint8_t bh1750_ok = 0;
 uint32_t bh1750_lastRead = 0;
+uint32_t bh1750_lastSend = 0;
 uint16_t bh1750_lux = -1;
+uint16_t bh1750_lastLux = -1;
 
 // MLX90614 IR thermometer
 uint8_t mlx90614_ok = 0;
 uint32_t mlx90614_lastRead = 0;
+uint32_t mlx90614_lastSend = 0;
 float mlx90614_ambient_temp = -273.15;
 float mlx90614_object_temp = -273.15;
+float mlx90614_ambient_lastTemp = -273.15;
+float mlx90614_object_lastTemp = -273.15;
 
 // APDS9960 RGB and gesture sensor
 SparkFun_APDS9960 apds9960 = SparkFun_APDS9960();
 uint8_t apds9960_ok = 0;
 uint32_t apds9960_lastRead = 0;
+uint32_t apds9960_lastSend = 0;
+uint32_t apds9960_lastR = -999;
+uint32_t apds9960_lastG = -999;
+uint32_t apds9960_lastB = -999;
+uint32_t apds9960_lastA = -999;
 
 // Si7021 temperature and humidity sensor
 Weather si7021;
 uint8_t si7021_ok = 0;
 uint32_t si7021_lastRead = 0;
+uint32_t si7021_lastSend = 0;
+float si7021_lastTemp = -999;
+float si7021_lastHumi = -999;
 
 // BME280 sensor
 Adafruit_BME280 bme280;
 uint8_t bme280_ok = 0;
 uint32_t bme280_lastRead = 0;
+uint32_t bme280_lastSend = 0;
+float bme280_lastTemp = -999;
+float bme280_lastHumi = -999;
+float bme280_lastPres = -999;
+
+
 // Dallas DS28B20 OneWire temperature sensor
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature ds18b20(&oneWire);
@@ -95,6 +119,12 @@ DeviceAddress tempDs18b20Address; // We'll use this variable to store a found de
 float round_float(float val, int dec) {
   // Return val rounded to dec decimals
   return (int)(val * pow(10,dec) + 0.5) / 1.0 / pow(10,dec);
+}
+
+float abs_diff(float a, float b) {
+  float c = a - b;
+  if (c < 0) {c = -c;}
+  return c;
 }
 
 void MqttSetup() {
@@ -184,16 +214,31 @@ void read_bme280() {
   // Read BME280 if it has been initialised successfully and it is time to read it
   if ((bme280_ok == 1) && (millis() > (bme280_lastRead + BME280_SEND_DELAY))) {
     bme280_lastRead = millis();
-    float humidity = round_float(bme280.readHumidity(), 1);
-    float temp = round_float(bme280.readTemperature(), 1);
-    float pres = round_float(bme280.readPressure() / 100.0F, 1);
-    if (humidity > 0.0) {
+    float humi = bme280.readHumidity();
+    float temp = bme280.readTemperature();
+    float pres = bme280.readPressure() / 100.0F;
+    //float humi = round_float(bme280.readHumidity(), 1);
+    //float temp = round_float(bme280.readTemperature(), 1);
+    //float pres = round_float(bme280.readPressure() / 100.0F, 1);
+    // Send data only when it has changed enough or it is time to send it anyway    
+    if (
+        (bme280_lastSend > (millis() + SENSOR_SEND_MAX_DELAY)) ||
+        (abs_diff(bme280_lastTemp, temp) > 0.2) ||
+        (abs_diff(bme280_lastHumi, humi) > 1.0) ||
+        (abs_diff(bme280_lastPres, pres) > 0.2)
+    ) {
+      bme280_lastSend = millis();
       SendDataToMQTT("bme280", 
-        "temp", temp,
-        "humi", humidity,
-        "pres", pres,
-        "", 0
+        "temp", round_float(temp, 2),
+        "humi", round_float(humi, 1),
+        "pres", round_float(pres, 2),
+        "", 0,
+        -1
       );
+      bme280_lastSend = millis();
+      bme280_lastTemp = temp;
+      bme280_lastHumi = humi;
+      bme280_lastPres = pres;
     }
   }
 }
@@ -222,17 +267,44 @@ void read_bme680() {
       return;
     } else {
       bme680_lastRead = millis();
-      float humidity = round_float(bme680.humidity, 1);
+      float temp = bme680.temperature;
+      float humi = bme680.humidity;
+      float pres = bme680.pressure / 100.0F;
+      float gas = bme680.gas_resistance / 1000.0F;
+      /* DEBUGS: TODO remove
       float temp = round_float(bme680.temperature, 2);
+      float humi = round_float(bme680.humidity, 1);
       float pres = round_float(bme680.pressure / 100.0F, 2);
       float gas = round_float(bme680.gas_resistance / 1000.0F, 1);
-      
-      SendDataToMQTT("bme680", 
-        "temp", temp,
-        "humi", humidity,
-        "pres", pres,
-        "gas", gas
-      );
+      Serial.println(abs_diff(bme680_lastTemp, temp));
+      Serial.println(abs_diff(bme680_lastHumi, humi));
+      Serial.println(abs_diff(bme680_lastPres, pres));
+      Serial.println(abs_diff(bme680_lastGas, gas));
+      Serial.println(bme680_lastSend);
+      Serial.println(millis() + SENSOR_SEND_MAX_DELAY);
+      */
+      if (
+          ((bme680_lastSend + SENSOR_SEND_MAX_DELAY) < millis()) ||
+          (abs_diff(bme680_lastTemp, temp) > 0.2) ||
+          (abs_diff(bme680_lastHumi, humi) > 1.0) ||
+          (abs_diff(bme680_lastPres, pres) > 0.2) ||
+          (abs_diff(bme680_lastGas, gas) > 3.0)
+      ) {
+        SendDataToMQTT("bme680",
+          "temp", round_float(temp, 2),
+          "humi", round_float(humi, 1),
+          "pres", round_float(pres, 2),
+          "gas", round_float(gas, 1),
+          -1
+        );
+        bme680_lastSend = millis();
+        bme680_lastTemp = temp;
+        bme680_lastHumi = humi;
+        bme680_lastPres = pres;
+        bme680_lastGas = gas;
+      } else {
+        Serial.println("not sending");
+      }
     }
   }
 }
@@ -256,12 +328,20 @@ void read_bh1750() {
   if ((bh1750_ok == 1) && (millis() > (bh1750_lastRead + BH1750_SEND_DELAY))) {
     bh1750_lastRead = millis();
     uint16_t lux = bh1750.readLightLevel();
-    SendDataToMQTT("bh1750", 
-      "lux", lux,
-      "", 0,
-      "", 0,
-      "", 0
-    );
+    if (
+        ((bh1750_lastSend + SENSOR_SEND_MAX_DELAY) < millis()) ||
+        (abs_diff(bh1750_lastLux, lux) > 2)
+    ) {  
+      SendDataToMQTT("bh1750", 
+        "lux", lux,
+        "", 0,
+        "", 0,
+        "", 0,
+        -1
+      );
+      bh1750_lastLux = lux;
+      bh1750_lastSend = millis();
+    }
   }
 }
 
@@ -279,17 +359,27 @@ void init_mlx90614() {
 }
 
 void read_mlx90614() {
-  // Read BH1750 if it has been initialised successfully and it is time to read it
+  // Read MLX90614 if it has been initialised successfully and it is time to read it
   if ((mlx90614_ok == 1) && (millis() > (mlx90614_lastRead + MLX90614_SEND_DELAY))) {
-    mlx90614_object_temp = round_float(readObjectTempC(0x5A), 1);
-    mlx90614_ambient_temp = round_float(readAmbientTempC(0x5A), 1);
+    mlx90614_object_temp = readObjectTempC(0x5A);
+    mlx90614_ambient_temp = readAmbientTempC(0x5A);
     mlx90614_lastRead = millis();
-    SendDataToMQTT("mlx90614", 
-      "obtemp", mlx90614_object_temp,
-      "amtemp", mlx90614_ambient_temp,
-      "", 0,
-      "", 0
-    );
+    if (
+        ((mlx90614_lastSend + SENSOR_SEND_MAX_DELAY) < millis()) ||
+        (abs_diff(mlx90614_object_lastTemp, mlx90614_object_temp) > 0.2) ||
+        (abs_diff(mlx90614_ambient_lastTemp, mlx90614_ambient_temp) > 0.2) 
+    ) {    
+      SendDataToMQTT("mlx90614", 
+        "obtemp", round_float(mlx90614_object_temp, 2),
+        "amtemp", round_float(mlx90614_ambient_temp, 2),
+        "", 0,
+        "", 0,
+        -1
+      );
+      mlx90614_lastSend = millis();
+      mlx90614_object_lastTemp = mlx90614_object_temp;
+      mlx90614_ambient_lastTemp = mlx90614_ambient_temp;
+    }
   }
 }
 
@@ -319,12 +409,26 @@ void read_apds9960() {
       Serial.println("Error reading light values");
       return;
     }
-    SendDataToMQTT("apds9960",
-      "r", r,
-      "g", g,
-      "b", b,
-      "a", a
-    );
+    if (
+        ((apds9960_lastSend + SENSOR_SEND_MAX_DELAY) < millis()) ||
+        (abs_diff(apds9960_lastR, r) > 1.0) ||
+        (abs_diff(apds9960_lastG, g) > 1.0) ||
+        (abs_diff(apds9960_lastB, b) > 1.0) ||
+        (abs_diff(apds9960_lastA, a) > 2.0)
+    ) {    
+      SendDataToMQTT("apds9960",
+        "r", r,
+        "g", g,
+        "b", b,
+        "a", a,
+        -1
+      );
+      apds9960_lastSend = millis();
+      apds9960_lastR = r;
+      apds9960_lastG = g;
+      apds9960_lastB = b;
+      apds9960_lastA = a;
+    }
   }
 }
 
@@ -343,14 +447,28 @@ void init_si7021() {
 void read_si7021() {
   if ((si7021_ok == 1) && (millis() > (si7021_lastRead + SI7021_SEND_DELAY))) {
     si7021_lastRead = millis();
-    float humidity = round_float(si7021.getRH(), 1);
-    float temp = round_float(si7021.getTemp(), 1);
-    SendDataToMQTT("si7021",
-      "temp", temp,
-      "humi", humidity,
-      "", 0,
-      "", 0
-    );
+    float humi = si7021.getRH();
+    float temp = si7021.getTemp();
+    if (
+        ((si7021_lastSend + SENSOR_SEND_MAX_DELAY) < millis()) ||
+        (abs_diff(si7021_lastTemp, temp) > 0.2) ||
+        (abs_diff(si7021_lastHumi, humi) > 1.0)
+    ) {    
+      SendDataToMQTT("si7021",
+        "temp", round_float(temp, 2),
+        "humi", round_float(humi, 2),
+        "", 0,
+        "", 0,
+        -1
+      );
+      si7021_lastSend = millis();
+      si7021_lastTemp = temp;
+      si7021_lastHumi = humi;
+    }
+  }
+}
+
+
 void init_ds18b20() {
   Serial.print(F("INIT DS18B20: "));
   ds18b20.begin();
@@ -396,7 +514,8 @@ void SendDataToMQTT(char const sensor[],
                     char const type1[], float val1, 
                     char const type2[], float val2, 
                     char const type3[], float val3, 
-                    char const type4[], float val4) {
+                    char const type4[], float val4,
+                    int8_t sn) {
   /**
    * Send data to the MQTT broker. Currently max 4 key/value pairs are supported. 
    * If you set typeX argument empty (""), if will be left out from the payload.
@@ -414,6 +533,9 @@ void SendDataToMQTT(char const sensor[],
   JsonObject& root = jsonBuffer.createObject();
   root["sensor"] = sensor;
   root["mac"] = mac_str;
+  if (sn >= 0) {
+    root["sn"] = sn;
+  }
   JsonObject& data = root.createNestedObject("data");
   if (type1[0] != 0) { data[type1] = val1; }
   if (type2[0] != 0) { data[type2] = val2; }
@@ -421,13 +543,15 @@ void SendDataToMQTT(char const sensor[],
   if (type4[0] != 0) { data[type4] = val4; }
   root.printTo(jsonChar);
   msg_len = strlen(MQTT_TOPIC) + strlen(jsonChar);
+  Serial.print(round_float((millis() / 1000.0), 2));
+  Serial.print("s ");
   Serial.print(msg_len);
   Serial.print("B ");
   Serial.print(MQTT_TOPIC);
   Serial.print(" ");
   Serial.println(jsonChar);
   if (msg_len > 120) {
-    Serial.print("Warning: TOPIC + JSON > 120 bytes.");
+    Serial.println("Warning: TOPIC + JSON > 120 bytes.");
   }
   client.publish(MQTT_TOPIC, jsonChar);
 }
