@@ -34,6 +34,8 @@
 #include <BH1750.h>               // https://github.com/claws/BH1750
 #include <SparkFun_APDS9960.h>
 #include "SparkFun_Si7021_Breakout_Library.h"  // https://github.com/sparkfun/Si7021_Breakout
+#include <OneWire.h>
+#include <DallasTemperature.h>
 
 // I2C settings
 #define SDA     D2
@@ -83,6 +85,12 @@ uint32_t si7021_lastRead = 0;
 Adafruit_BME280 bme280;
 uint8_t bme280_ok = 0;
 uint32_t bme280_lastRead = 0;
+// Dallas DS28B20 OneWire temperature sensor
+OneWire oneWire(ONE_WIRE_BUS);
+DallasTemperature ds18b20(&oneWire);
+uint8_t ds18b20_ok = 0;
+uint32_t ds18b20_lastRead = 0;
+DeviceAddress tempDs18b20Address; // We'll use this variable to store a found device address
 
 float round_float(float val, int dec) {
   // Return val rounded to dec decimals
@@ -149,6 +157,7 @@ void init_sensors() {
   init_mlx90614();
   init_apds9960();
   init_si7021();
+  init_ds18b20();
 }
 
 void read_sensors() {
@@ -158,6 +167,7 @@ void read_sensors() {
   read_mlx90614();
   read_apds9960();
   read_si7021();
+  read_ds18b20();
 }
 
 void init_bme280() {
@@ -341,6 +351,43 @@ void read_si7021() {
       "", 0,
       "", 0
     );
+void init_ds18b20() {
+  Serial.print(F("INIT DS18B20: "));
+  ds18b20.begin();
+  delay(500);//Wait for newly restarted system to stabilize
+  uint8_t dev_cnt = ds18b20.getDeviceCount();
+  if (dev_cnt > 0) {
+    Serial.print("Found ");
+    Serial.print(dev_cnt, DEC);
+    Serial.println(" devices.");
+    ds18b20_ok = 1;
+  } else {
+    Serial.println(F("not found"));
+  }
+}
+
+void read_ds18b20() {
+  if ((ds18b20_ok == 1) && (millis() > (ds18b20_lastRead + DS18B20_SEND_DELAY))) {
+    ds18b20_lastRead = millis();
+    uint8_t dev_cnt = ds18b20.getDeviceCount();
+    for (uint8_t i=0; i<dev_cnt; i++) {
+      if(ds18b20.getAddress(tempDs18b20Address, i)) {
+        // set the resolution to TEMPERATURE_PRECISION bit (Each Dallas/Maxim device is capable of several different resolutions)
+        // ds18b20.setResolution(tempDs18b20Address, 12);
+        float tempC = ds18b20.getTempC(tempDs18b20Address);
+        SendDataToMQTT("ds18b20",
+          "temp", tempC,
+          "", 0,
+          "", 0,
+          "", 0,
+          i
+        );
+      } else {
+        Serial.print("No device found at ");
+        Serial.print(i, DEC);
+        Serial.println("");
+      }
+    }
   }
 }
 

@@ -19,3 +19,6 @@
 
 #define BME280_SEND_DELAY 1000 // milliseconds
 
+#define DS18B20_SEND_DELAY 2000 // milliseconds
+#define ONE_WIRE_BUS D5         // data pin (a 4.7-10K pull-up resistor is necessary, wemos mini has it built-in on D3, D4)
+
