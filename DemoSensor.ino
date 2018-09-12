@@ -127,6 +127,12 @@ float abs_diff(float a, float b) {
   return c;
 }
 
+float log10_diff(float a, float b) {
+  float log_a = log10(a);
+  float log_b = log10(b);
+  return abs_diff(log_a, log_b);
+}
+
 void MqttSetup() {
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("No WiFi so no MQTT. Continuing.");
@@ -317,7 +323,7 @@ void read_bh1750() {
     uint16_t lux = bh1750.readLightLevel();
     if (
         ((bh1750_lastSend + SENSOR_SEND_MAX_DELAY) < millis()) ||
-        (abs_diff(bh1750_lastLux, lux) > 2)
+        (log10_diff(bh1750_lastLux, lux) > 0.05)
     ) {  
       SendDataToMQTT("bh1750", 
         "lux", lux,
