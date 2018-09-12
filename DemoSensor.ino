@@ -221,9 +221,6 @@ void read_bme280() {
     float humi = bme280.readHumidity();
     float temp = bme280.readTemperature();
     float pres = bme280.readPressure() / 100.0F;
-    //float humi = round_float(bme280.readHumidity(), 1);
-    //float temp = round_float(bme280.readTemperature(), 1);
-    //float pres = round_float(bme280.readPressure() / 100.0F, 1);
     // Send data only when it has changed enough or it is time to send it anyway    
     if (
         (bme280_lastSend > (millis() + SENSOR_SEND_MAX_DELAY)) ||
@@ -275,18 +272,6 @@ void read_bme680() {
       float humi = bme680.humidity;
       float pres = bme680.pressure / 100.0F;
       float gas = bme680.gas_resistance / 1000.0F;
-      /* DEBUGS: TODO remove
-      float temp = round_float(bme680.temperature, 2);
-      float humi = round_float(bme680.humidity, 1);
-      float pres = round_float(bme680.pressure / 100.0F, 2);
-      float gas = round_float(bme680.gas_resistance / 1000.0F, 1);
-      Serial.println(abs_diff(bme680_lastTemp, temp));
-      Serial.println(abs_diff(bme680_lastHumi, humi));
-      Serial.println(abs_diff(bme680_lastPres, pres));
-      Serial.println(abs_diff(bme680_lastGas, gas));
-      Serial.println(bme680_lastSend);
-      Serial.println(millis() + SENSOR_SEND_MAX_DELAY);
-      */
       if (
           ((bme680_lastSend + SENSOR_SEND_MAX_DELAY) < millis()) ||
           (abs_diff(bme680_lastTemp, temp) > 0.2) ||
@@ -306,8 +291,6 @@ void read_bme680() {
         bme680_lastHumi = humi;
         bme680_lastPres = pres;
         bme680_lastGas = gas;
-      } else {
-        Serial.println("not sending");
       }
     }
   }
@@ -559,4 +542,3 @@ void SendDataToMQTT(char const sensor[],
   }
   client.publish(MQTT_TOPIC, jsonChar);
 }
-
