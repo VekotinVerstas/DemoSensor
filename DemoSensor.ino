@@ -166,7 +166,11 @@ void setup() {
   Serial.println();
   Serial.println();
   init_sensors();
-  wifiManager.autoConnect(ESP_AP_NAME, ESP_AP_PW);
+  char ap_name[30];
+  sprintf(ap_name, "SensorDemo_%d", ESP.getChipId());
+  Serial.print("AP name would be: ");
+  Serial.println(ap_name);
+  wifiManager.autoConnect(ap_name);
   MqttSetup();
 }
 
