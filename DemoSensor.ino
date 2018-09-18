@@ -34,6 +34,7 @@
 #include <BH1750.h>               // https://github.com/claws/BH1750
 #include <SparkFun_APDS9960.h>
 #include "SparkFun_Si7021_Breakout_Library.h"  // https://github.com/sparkfun/Si7021_Breakout
+#include "SdsDustSensor.h"
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
@@ -108,6 +109,17 @@ float bme280_lastTemp = -999;
 float bme280_lastHumi = -999;
 float bme280_lastPres = -999;
 
+// SDS011 PM sensor
+// SDS011 Software serial settings
+// TODO: move to settings.h
+int rxPin = D5;
+int txPin = D6;
+SdsDustSensor sds011(rxPin, txPin);
+uint8_t sds011_ok = 0;
+uint32_t sds011_lastRead = 0;
+uint32_t sds011_lastSend = 0;
+float sds011_lastPM25 = -1.0;
+float sds011_lastPM10 = -1.0;
 
 // Dallas DS28B20 OneWire temperature sensor
 OneWire oneWire(ONE_WIRE_BUS);
@@ -197,6 +209,7 @@ void init_sensors() {
   init_mlx90614();
   init_apds9960();
   init_si7021();
+  init_sds011();
   init_ds18b20();
 }
 
@@ -207,6 +220,7 @@ void read_sensors() {
   read_mlx90614();
   read_apds9960();
   read_si7021();
+  read_sds011();
   read_ds18b20();
 }
 
@@ -460,6 +474,54 @@ void read_si7021() {
     }
   }
 }
+
+void init_sds011() {
+  Serial.print(F("INIT sds011: "));
+  sds011.begin();
+  delay(500); // Wait shortly to make sure SDS is responsive
+  String undef = String("Mode: undefined");
+  Serial.println(undef);
+  if (undef == sds011.setContinuousWorkingPeriod().toString()) {
+    Serial.println(F("not found"));
+  } else {
+    Serial.println(sds011.queryFirmwareVersion().toString()); // prints firmware version
+    Serial.println(sds011.setActiveReportingMode().toString()); // ensures sensor is in 'active' reporting mode
+    Serial.println(sds011.setContinuousWorkingPeriod().toString()); // ensures sensor has continuous working period - default but not recommended
+    sds011_ok = 1;
+  }
+}
+
+void read_sds011() {
+  if ((sds011_ok == 1) && (millis() > (sds011_lastRead + SDS011_SEND_DELAY))) {
+    sds011_lastRead = millis();
+    PmResult pm = sds011.readPm();
+    if (pm.isOk()) {
+      float pm25 = pm.pm25;
+      float pm10 = pm.pm10;
+      Serial.print("PM2.5 = ");
+      Serial.print(pm25);
+      Serial.print(", PM10 = ");
+      Serial.println(pm10);
+      if (
+          ((sds011_lastSend + SENSOR_SEND_MAX_DELAY) < millis()) ||
+          (abs_diff(sds011_lastPM25, pm25) > 0.1) ||
+          (abs_diff(sds011_lastPM10, pm10) > 0.1)
+      ) {    
+        SendDataToMQTT("sds011",
+          "pm25", pm25,
+          "pm10", pm10,
+          "", 0,
+          "", 0,
+          -1
+        );
+        sds011_lastSend = millis();
+        sds011_lastPM25 = pm25;
+        sds011_lastPM10 = pm10;
+      }
+    }
+  }
+}
+
 
 
 void init_ds18b20() {
