@@ -12,13 +12,32 @@
    - APDS-9960 gesture / rgb light sensor
    - MLX90614 IR thermometer
    - Si7021 temperature / humidity sensor
+   - SDS011 PM2.5/PM10 (Particle matter) sensor
    TODO:
    - a button or any device which creates interrupts
    - APDS-9960 gestures
    - Dallas DS18B20
+   - MHZ19 CO2 sensor
+
+  NOTE
+  You must install libraries below using Arduino IDE's 
+  Sketch --> Include Library --> Manage Libraries... command
+
+   PubSubClient (version >= 2.6.0 by Nick O'Leary)
+   ArduinoJson (version > 5.13 < 6.0 by Benoit Blanchon)
+   WiFiManager (version >= 0.14.0 by tzapu)
+   Adafruit Unified Sensor (version >= 1.0.2 by Adafruit)
+   Adafruit BME280 Library
+   Adafruit BME680 Library
+   SparkFun APDS9960 RGB and Gesture Sensor
+   SparkFun Si7021 Humidity and Temperature Sensor
+   Nova Fitness Sds dust sensors library
+   OneWire by Jim Studt, Tom Pollard etc.
+   DallasTemperature by Miles Burton etc.
+   
  **************************************************************************************/
 
-#include "settings.h"
+#include "settings.h"             // Remember to copy settings-example.h to settings.h and check all values!
 #include <Wire.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
@@ -30,13 +49,14 @@
 // Sensor support libraries
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
-#include "Adafruit_BME680.h"
-#include <BH1750.h>               // https://github.com/claws/BH1750
+#include <Adafruit_BME680.h>
 #include <SparkFun_APDS9960.h>
-#include "SparkFun_Si7021_Breakout_Library.h"  // https://github.com/sparkfun/Si7021_Breakout
-#include "SdsDustSensor.h"
+#include <SparkFun_Si7021_Breakout_Library.h>  // https://github.com/sparkfun/Si7021_Breakout
+#include <SdsDustSensor.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#include "src/BH1750.h"           // https://github.com/claws/BH1750
+#include "src/mhz19.h"
 
 // I2C settings
 #define SDA     D2
@@ -105,8 +125,8 @@ Adafruit_BME280 bme280;
 uint8_t bme280_ok = 0;
 uint32_t bme280_lastRead = 0;
 uint32_t bme280_lastSend = 0;
-float bme280_lastTemp = -999;
 float bme280_lastHumi = -999;
+float bme280_lastTemp = -999;
 float bme280_lastPres = -999;
 
 // SDS011 PM sensor
