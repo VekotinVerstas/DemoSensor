@@ -111,10 +111,10 @@ float bme280_lastPres = -999;
 
 // SDS011 PM sensor
 // SDS011 Software serial settings
-// TODO: move to settings.h
-int rxPin = D5;
-int txPin = D6;
-SdsDustSensor sds011(rxPin, txPin);
+// TODO: move to settings.h. Also explicitly configure if is SDS011 present.
+//int rxPin = D5;
+//int txPin = D6;
+SdsDustSensor sds011(SDS011_RXPIN, SDS011_TXPIN);
 uint8_t sds011_ok = 0;
 uint32_t sds011_lastRead = 0;
 uint32_t sds011_lastSend = 0;
@@ -478,7 +478,7 @@ void read_si7021() {
 void init_sds011() {
   Serial.print(F("INIT sds011: "));
   sds011.begin();
-  delay(500); // Wait shortly to make sure SDS is responsive
+  delay(1500); // Wait shortly to make sure SDS is responsive
   String undef = String("Mode: undefined");
   Serial.println(undef);
   if (undef == sds011.setContinuousWorkingPeriod().toString()) {
