@@ -263,7 +263,7 @@ void read_bme280() {
     float pres = bme280.readPressure() / 100.0F;
     // Send data only when it has changed enough or it is time to send it anyway    
     if (
-        (bme280_lastSend > (millis() + SENSOR_SEND_MAX_DELAY)) ||
+        (millis() > (bme280_lastSend + SENSOR_SEND_MAX_DELAY)) ||
         (abs_diff(bme280_lastTemp, temp) > 0.2) ||
         (abs_diff(bme280_lastHumi, humi) > 1.0) ||
         (abs_diff(bme280_lastPres, pres) > 0.2)
