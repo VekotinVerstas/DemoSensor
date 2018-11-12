@@ -144,8 +144,12 @@ float sds011_lastPM10 = -1.0;
 // Dallas DS28B20 OneWire temperature sensor
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature ds18b20(&oneWire);
+uint8_t ds18b20_count = 0;
 uint8_t ds18b20_ok = 0;
 uint32_t ds18b20_lastRead = 0;
+// Only 10 sensors supported
+uint32_t ds18b20_lastSend[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+float ds18b20_last[] = {-999.0, -999.0, -999.0, -999.0, -999.0, -999.0, -999.0, -999.0, -999.0, -999.0};
 DeviceAddress tempDs18b20Address; // We'll use this variable to store a found device address
 
 float round_float(float val, int dec) {
@@ -548,10 +552,10 @@ void init_ds18b20() {
   Serial.print(F("INIT DS18B20: "));
   ds18b20.begin();
   delay(500);//Wait for newly restarted system to stabilize
-  uint8_t dev_cnt = ds18b20.getDeviceCount();
-  if (dev_cnt > 0) {
+  ds18b20_count = ds18b20.getDeviceCount();
+  if (ds18b20_count > 0) {
     Serial.print("Found ");
-    Serial.print(dev_cnt, DEC);
+    Serial.print(ds18b20_count, DEC);
     Serial.println(" devices.");
     ds18b20_ok = 1;
   } else {
@@ -562,19 +566,30 @@ void init_ds18b20() {
 void read_ds18b20() {
   if ((ds18b20_ok == 1) && (millis() > (ds18b20_lastRead + DS18B20_SEND_DELAY))) {
     ds18b20_lastRead = millis();
-    uint8_t dev_cnt = ds18b20.getDeviceCount();
-    for (uint8_t i=0; i<dev_cnt; i++) {
+    ds18b20_count = ds18b20.getDeviceCount();
+    Serial.print("Requesting temperatures..."); 
+    ds18b20.requestTemperatures(); // Send the command to get temperatures
+    Serial.println("DONE");  
+    for (uint8_t i=0; i<ds18b20_count; i++) {
       if(ds18b20.getAddress(tempDs18b20Address, i)) {
         // set the resolution to TEMPERATURE_PRECISION bit (Each Dallas/Maxim device is capable of several different resolutions)
-        // ds18b20.setResolution(tempDs18b20Address, 12);
+        ds18b20.setResolution(tempDs18b20Address, 11);
         float tempC = ds18b20.getTempC(tempDs18b20Address);
-        SendDataToMQTT("ds18b20",
-          "temp", tempC,
-          "", 0,
-          "", 0,
-          "", 0,
-          i
-        );
+        int16_t id = tempDs18b20Address[6] * 256 + tempDs18b20Address[7];
+        if (
+            ((ds18b20_lastSend[i] + SENSOR_SEND_MAX_DELAY) < millis()) ||
+            (abs_diff(ds18b20_last[i], tempC) > 0.2)
+        ) {        
+          SendDataToMQTT("ds18b20",
+            "temp", tempC,
+            "", 0,
+            "", 0,
+            "", 0,
+            id
+          );
+          ds18b20_lastSend[i] = millis();
+          ds18b20_last[i] = tempC;          
+        }
       } else {
         Serial.print("No device found at ");
         Serial.print(i, DEC);
@@ -590,7 +605,7 @@ void SendDataToMQTT(char const sensor[],
                     char const type2[], float val2, 
                     char const type3[], float val3, 
                     char const type4[], float val4,
-                    int8_t sn) {
+                    int16_t sn) {
   /**
    * Send data to the MQTT broker. Currently max 4 key/value pairs are supported. 
    * If you set typeX argument empty (""), if will be left out from the payload.
