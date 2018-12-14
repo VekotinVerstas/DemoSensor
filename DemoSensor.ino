@@ -256,7 +256,7 @@ void init_bme280() {
 
 void read_bme280() {
   // Read BME280 if it has been initialised successfully and it is time to read it
-  if ((bme280_ok == 1) && (millis() > (bme280_lastRead + BME280_SEND_DELAY))) {
+  if ((bme280_ok == 1) && (millis() > (bme280_lastRead + BME280_SEND_DELAY)) or (millis() < bme280_lastRead) ) {
     bme280_lastRead = millis();
     float humi = bme280.readHumidity();
     float temp = bme280.readTemperature();
@@ -266,7 +266,9 @@ void read_bme280() {
         (millis() > (bme280_lastSend + SENSOR_SEND_MAX_DELAY)) ||
         (abs_diff(bme280_lastTemp, temp) > 0.2) ||
         (abs_diff(bme280_lastHumi, humi) > 1.0) ||
-        (abs_diff(bme280_lastPres, pres) > 0.2)
+        (abs_diff(bme280_lastPres, pres) > 0.2) ||
+        (millis() < bme280_lastSend) // or millis() overflow
+        
     ) {
       bme280_lastSend = millis();
       SendDataToMQTT("bme280", 
