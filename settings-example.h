@@ -4,6 +4,7 @@
 #define MQTT_PORT 1883
 #define MQTT_USER "mqtt_user_with_read-write_permission_to_topic"
 #define MQTT_PASSWORD "mqtt_password"
+#define MQTT_MAX_PACKET_SIZE 256 // For pubsubclient, default is 128 B
 
 #define SENSOR_SEND_MAX_DELAY 60000 // milliseconds, after this send data anyway even it has not changed at all
 
