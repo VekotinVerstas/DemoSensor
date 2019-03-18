@@ -77,6 +77,13 @@ unsigned long mqttConnRetries = 0;
 
 /* Sensor variables */
 
+// Buttons (digital HIGH / LOW)
+// PUSHBUTTON_1 and PUSHBUTTON_1 in settings.h
+uint32_t pushButton1_lastRead = 0;
+uint32_t pushButton1_lastSend = 0;
+float pushButton1_lastState = 0;
+float pushButton2_lastState = 0;
+
 // BME680 AQ sensor
 Adafruit_BME680 bme680;
 uint8_t bme680_ok = 0;
@@ -242,6 +249,7 @@ void loop() {
 }
 
 void init_sensors() {
+  init_pushButton();
   init_bme280();
   init_bme680();
   init_bh1750();
@@ -265,6 +273,47 @@ void read_sensors() {
   read_mhz19();
   read_ds18b20();
 }
+
+void init_pushButton() {
+  Serial.println(F("INIT Pushbutton "));
+  pinMode(PUSHBUTTON_1, INPUT);
+  pinMode(PUSHBUTTON_2, INPUT);
+}
+
+void read_pushButton() {
+  // Read PUSHBUTTON if it has been initialised successfully and it is time to read it
+  //Serial.println("read_pushButton()");
+  if ((millis() > (pushButton1_lastRead + PUSHBUTTON_SEND_DELAY))) {
+    pushButton1_lastRead = millis();
+    int buttonState1 = digitalRead(PUSHBUTTON_1);
+    int buttonState2 = digitalRead(PUSHBUTTON_2);
+    /*
+    Serial.print("but 1 & 2: ");
+    Serial.print(buttonState1);
+    Serial.print(" ");
+    Serial.println(buttonState2);
+    */
+    // Send data only when it has changed enough or it is time to send it anyway    
+    if (
+        (millis() > (pushButton1_lastSend + SENSOR_SEND_MAX_DELAY)) || 
+        (pushButton1_lastState != buttonState1 ||
+         pushButton2_lastState != buttonState2)
+    ) {
+      pushButton1_lastSend = millis();
+      SendDataToMQTT("button", 
+        "b1", buttonState1,
+        "b2", buttonState2,
+        "", 0,
+        "", 0,
+        -1
+      );
+      pushButton1_lastRead = millis();
+    }
+    pushButton1_lastState = buttonState1;
+    pushButton2_lastState = buttonState2;
+  }
+}
+
 
 void init_bme280() {
   Serial.print(F("INIT BME280: "));

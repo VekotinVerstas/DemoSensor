@@ -9,6 +9,12 @@
 #define SENSOR_SEND_MAX_DELAY 60000 // milliseconds, after this send data anyway even it has not changed at all
 
 // Sensor settings
+
+// Buttons (digital HIGH / LOW)
+#define PUSHBUTTON_1 D7
+#define PUSHBUTTON_2 D8
+#define PUSHBUTTON_SEND_DELAY 100
+
 #define BME680_HEATING_TIME 150 // milliseconds
 #define BME680_SEND_DELAY 10000 // milliseconds
 
