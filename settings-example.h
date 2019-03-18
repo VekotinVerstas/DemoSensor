@@ -26,5 +26,9 @@
 #define SDS011_RXPIN D3
 #define SDS011_TXPIN D4
 
+#define MHZ19_SEND_DELAY 5000 // milliseconds
+#define MHZ19_RXPIN D5
+#define MHZ19_TXPIN D6
+
 #define DS18B20_SEND_DELAY 2000 // milliseconds
 #define ONE_WIRE_BUS D3         // data pin (a 4.7-10K pull-up resistor is necessary, wemos mini has it built-in on D3, D4)

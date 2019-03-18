@@ -13,11 +13,11 @@
    - MLX90614 IR thermometer
    - Si7021 temperature / humidity sensor
    - SDS011 PM2.5/PM10 (Particle matter) sensor
+   - MHZ19 CO2 sensor 
    TODO:
    - a button or any device which creates interrupts
    - APDS-9960 gestures
    - Dallas DS18B20
-   - MHZ19 CO2 sensor
 
   NOTE
   You must install libraries below using Arduino IDE's 
@@ -131,15 +131,20 @@ float bme280_lastPres = -999;
 
 // SDS011 PM sensor
 // SDS011 Software serial settings
-// TODO: move to settings.h. Also explicitly configure if is SDS011 present.
-//int rxPin = D5;
-//int txPin = D6;
+// TODO: Explicitly configure if is SDS011 present.
 SdsDustSensor sds011(SDS011_RXPIN, SDS011_TXPIN);
 uint8_t sds011_ok = 0;
 uint32_t sds011_lastRead = 0;
 uint32_t sds011_lastSend = 0;
 float sds011_lastPM25 = -1.0;
 float sds011_lastPM10 = -1.0;
+
+SoftwareSerial mhz19(MHZ19_RXPIN, MHZ19_TXPIN);
+uint8_t mhz19_ok = 0;
+uint32_t mhz19_lastRead = 0;
+uint32_t mhz19_lastSend = 0;
+int mhz19_lastCO2 = -1.0;
+int mhz19_lastTemp = -100.0;
 
 // Dallas DS28B20 OneWire temperature sensor
 OneWire oneWire(ONE_WIRE_BUS);
@@ -234,10 +239,12 @@ void init_sensors() {
   init_apds9960();
   init_si7021();
   init_sds011();
+  init_mhz19();
   init_ds18b20();
 }
 
 void read_sensors() {
+  read_pushButton();
   read_bme280();
   read_bme680();  
   read_bh1750();  
@@ -245,6 +252,7 @@ void read_sensors() {
   read_apds9960();
   read_si7021();
   read_sds011();
+  read_mhz19();
   read_ds18b20();
 }
 
@@ -541,6 +549,84 @@ void read_sds011() {
         sds011_lastSend = millis();
         sds011_lastPM25 = pm25;
         sds011_lastPM10 = pm10;
+      }
+    }
+  }
+}
+
+// MH-Z19
+static bool exchange_command(uint8_t cmd, uint8_t data[], int timeout)
+{
+    // create command buffer
+    uint8_t buf[9];
+    int len = prepare_tx(cmd, data, buf, sizeof(buf));
+
+    // send the command
+    mhz19.write(buf, len);
+
+    // wait for response
+    long start = millis();
+    while ((millis() - start) < timeout) {
+        if (mhz19.available() > 0) {
+            uint8_t b = mhz19.read();
+            if (process_rx(b, cmd, data)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+static bool read_temp_co2(int *co2, int *temp)
+{
+    uint8_t data[] = {0, 0, 0, 0, 0, 0};
+    bool result = exchange_command(0x86, data, 3000);
+    if (result) {
+        *co2 = (data[0] << 8) + data[1];
+        *temp = data[2] - 40;
+    }
+    return result;
+}
+
+
+void init_mhz19() {
+  Serial.print(F("INIT MH-Z19: "));
+  mhz19.begin(9600);  
+  delay(1500); // Wait shortly to make sure MH-Z19 is responsive
+  if (read_temp_co2(&mhz19_lastCO2, &mhz19_lastTemp)) {
+    mhz19_ok = 1;
+    Serial.println(F("found"));
+  } else {
+    Serial.println(F("not found"));
+  }
+}
+
+void read_mhz19() {
+  if ((mhz19_ok == 1) && (millis() > (mhz19_lastRead + MHZ19_SEND_DELAY))) {
+    mhz19_lastRead = millis();
+    int CO2;
+    int Temp;
+    
+    if (read_temp_co2(&CO2, &Temp)) {
+      Serial.print("CO2: ");
+      Serial.print(CO2, DEC);
+      Serial.print(" TEMP: ");
+      Serial.println(Temp, DEC);
+      if (
+          ((mhz19_lastSend + SENSOR_SEND_MAX_DELAY) < millis()) ||
+          (abs_diff(mhz19_lastCO2, CO2) > 10) ||
+          (abs_diff(mhz19_lastTemp, Temp) > 1)
+      ) {    
+        SendDataToMQTT("mhz19",
+          "co2", CO2,
+          "temp", Temp,
+          "", 0,
+          "", 0,
+          -1
+        );
+        mhz19_lastSend = millis();
+        mhz19_lastCO2 = CO2;
+        mhz19_lastTemp = Temp;
       }
     }
   }
