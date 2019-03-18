@@ -72,6 +72,8 @@ WiFiClient wifiClient;
 WiFiManager wifiManager;
 PubSubClient client(MQTT_SERVER, 1883, callback, wifiClient);
 String mac_str;
+unsigned long lastMqttMsgTime;
+unsigned long mqttConnRetries = 0;
 
 /* Sensor variables */
 
@@ -212,23 +214,31 @@ void setup() {
   Serial.begin(115200);
   Serial.println();
   Serial.println();
+  lastMqttMsgTime = millis();
   init_sensors();
   char ap_name[30];
   sprintf(ap_name, "SensorDemo_%d", ESP.getChipId());
   Serial.print("AP name would be: ");
   Serial.println(ap_name);
+  wifiManager.setConfigPortalTimeout(180);
   wifiManager.autoConnect(ap_name);
   MqttSetup();
 }
 
 void loop() {
   if (!client.loop()) {
-    Serial.print("Client disconnected...");
+    Serial.println("Client disconnected...");
     // TODO: increase reconnect from every loop() to every 60 sec or so
+    mqttConnRetries++;
+    if (mqttConnRetries > 10) {
+      Serial.println("ESP.restart()");
+      ESP.restart();
+    }
     MqttSetup();
     return;
   }
   read_sensors();
+  mqttConnRetries = 0;
 }
 
 void init_sensors() {
@@ -708,7 +718,7 @@ void SendDataToMQTT(char const sensor[],
   char jsonChar[256];
   JsonObject& root = jsonBuffer.createObject();
   root["sensor"] = sensor;
-  root["mac"] = mac_str;
+  root["mac"] = mac_str; 
   if (sn >= 0) {
     root["sn"] = sn;
   }
@@ -729,5 +739,9 @@ void SendDataToMQTT(char const sensor[],
   if (msg_len > 120) {
     Serial.println("Warning: TOPIC + JSON > 120 bytes.");
   }
-  client.publish(MQTT_TOPIC, jsonChar);
+  if (client.publish(MQTT_TOPIC, jsonChar)) {
+    lastMqttMsgTime = millis();
+  } else {
+    Serial.println("Error: Publishing MQTT message failed.");
+  }
 }
