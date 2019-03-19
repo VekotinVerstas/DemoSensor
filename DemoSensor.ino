@@ -641,7 +641,7 @@ static bool exchange_command(uint8_t cmd, uint8_t data[], int timeout)
 static bool read_temp_co2(int *co2, int *temp)
 {
     uint8_t data[] = {0, 0, 0, 0, 0, 0};
-    bool result = exchange_command(0x86, data, 3000);
+    bool result = exchange_command(0x86, data, 2000);
     if (result) {
         *co2 = (data[0] << 8) + data[1];
         *temp = data[2] - 40;
