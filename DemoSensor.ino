@@ -205,7 +205,7 @@ void MqttSetup() {
     Serial.println("Connected to MQTT broker");
     Serial.print("Topic is: ");
     Serial.println(MQTT_TOPIC);
-
+    SendStartupToMQTT("version", "0.2.0");
   }
   else {
     Serial.println("MQTT connect failed");
@@ -778,6 +778,36 @@ void SendDataToMQTT(char const sensor[],
   if (type2[0] != 0) { data[type2] = val2; }
   if (type3[0] != 0) { data[type3] = val3; }
   if (type4[0] != 0) { data[type4] = val4; }
+  root.printTo(jsonChar);
+  msg_len = strlen(MQTT_TOPIC) + strlen(jsonChar);
+  Serial.print(round_float((millis() / 1000.0), 2));
+  Serial.print("s ");
+  Serial.print(msg_len);
+  Serial.print("B ");
+  Serial.print(MQTT_TOPIC);
+  Serial.print(" ");
+  Serial.println(jsonChar);
+  if (msg_len > 120) {
+    Serial.println("Warning: TOPIC + JSON > 120 bytes.");
+  }
+  if (client.publish(MQTT_TOPIC, jsonChar)) {
+    lastMqttMsgTime = millis();
+  } else {
+    Serial.println("Error: Publishing MQTT message failed.");
+  }
+}
+
+
+void SendStartupToMQTT(char const key1[], char const val1[]) {
+  /**
+   * Send startup message to the MQTT broker.
+   */
+  uint16_t msg_len = 0;
+  DynamicJsonBuffer jsonBuffer(512);
+  char jsonChar[256];
+  JsonObject& root = jsonBuffer.createObject();
+  root[key1] = val1;
+  root["mac"] = mac_str; 
   root.printTo(jsonChar);
   msg_len = strlen(MQTT_TOPIC) + strlen(jsonChar);
   Serial.print(round_float((millis() / 1000.0), 2));
