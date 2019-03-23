@@ -233,6 +233,10 @@ void setup() {
 }
 
 void loop() {
+  if (millis() < lastMqttMsgTime) {
+    Serial.println("millis() rollover - reboot");
+    ESP.restart();
+  }
   if (!client.loop()) {
     Serial.println("Client disconnected...");
     // TODO: increase reconnect from every loop() to every 60 sec or so
