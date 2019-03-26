@@ -78,6 +78,9 @@ unsigned long mqttConnRetries = 0;
 
 /* Sensor variables */
 
+uint32_t status_lastRead = 0;
+uint32_t status_lastSend = 0;
+
 // Buttons (digital HIGH / LOW)
 // PUSHBUTTON_1 and PUSHBUTTON_1 in settings.h
 uint32_t pushButton1_lastRead = 0;
@@ -150,7 +153,9 @@ uint32_t sds011_lastSend = 0;
 float sds011_lastPM25 = -1.0;
 float sds011_lastPM10 = -1.0;
 
+#ifdef MHZ19_USE
 SoftwareSerial mhz19(MHZ19_RXPIN, MHZ19_TXPIN);
+#endif
 uint8_t mhz19_ok = 0;
 uint32_t mhz19_lastRead = 0;
 uint32_t mhz19_lastSend = 0;
@@ -207,7 +212,7 @@ void MqttSetup() {
     Serial.println("Connected to MQTT broker");
     Serial.print("Topic is: ");
     Serial.println(MQTT_TOPIC);
-    SendStartupToMQTT("version", "0.2.0");
+    SendStartupToMQTT("version", "0.2.1");
   }
   else {
     Serial.println("MQTT connect failed");
@@ -244,7 +249,8 @@ void loop() {
     // TODO: increase reconnect from every loop() to every 60 sec or so
     mqttConnRetries++;
     if (mqttConnRetries > 10) {
-      Serial.println("ESP.restart()");
+      Serial.println("ESP.restart() after 30 seconds");
+      delay(30000);
       ESP.restart();
     }
     MqttSetup();
@@ -255,7 +261,7 @@ void loop() {
 }
 
 void init_sensors() {
-  init_pushButton();
+  // init_pushButton();
   init_bme280();
   init_bme680();
   init_bh1750();
@@ -263,12 +269,15 @@ void init_sensors() {
   init_apds9960();
   init_si7021();
   init_sds011();
+#ifdef MHZ19_USE
   init_mhz19();
+#endif
   init_ds18b20();
 }
 
 void read_sensors() {
-  read_pushButton();
+  // read_pushButton();
+  read_status();
   read_bme280();
   read_bme680();  
   read_bh1750();  
@@ -276,9 +285,31 @@ void read_sensors() {
   read_apds9960();
   read_si7021();
   read_sds011();
+#ifdef MHZ19_USE
   read_mhz19();
+#endif
   read_ds18b20();
 }
+
+void read_status() {
+  if (
+      (millis() > (status_lastRead + STATUS_SEND_DELAY)) || 
+      (status_lastSend == 0) 
+     ) {
+    status_lastRead = millis();
+    status_lastSend = millis();
+    long rssi = WiFi.RSSI();
+    long uptime = millis();
+    SendDataToMQTT("status", 
+        "rssi", rssi,
+        "uptime", uptime,
+        "", 0,
+        "", 0,
+        -1
+    );
+  }
+}
+
 
 void init_pushButton() {
   Serial.println(F("INIT Pushbutton "));
@@ -333,7 +364,8 @@ void init_bme280() {
 
 void read_bme280() {
   // Read BME280 if it has been initialised successfully and it is time to read it
-  if ((bme280_ok == 1) && (millis() > (bme280_lastRead + BME280_SEND_DELAY)) or (millis() < bme280_lastRead) ) {
+  if (
+      (bme280_ok == 1) && (millis() > (bme280_lastRead + BME280_SEND_DELAY)) or (millis() < bme280_lastRead) ) {
     bme280_lastRead = millis();
     float humi = bme280.readHumidity();
     float temp = bme280.readTemperature();
@@ -608,8 +640,9 @@ void read_sds011() {
       Serial.println(pm10);
       if (
           ((sds011_lastSend + SENSOR_SEND_MAX_DELAY) < millis()) ||
-          (abs_diff(sds011_lastPM25, pm25) > 0.1) ||
-          (abs_diff(sds011_lastPM10, pm10) > 0.1)
+          (abs_diff(sds011_lastPM25, pm25) > 0.3) ||
+          (abs_diff(sds011_lastPM10, pm10) > 0.3) ||
+          (sds011_lastSend == 0)
       ) {    
         SendDataToMQTT("sds011",
           "pm25", pm25,
@@ -626,6 +659,7 @@ void read_sds011() {
   }
 }
 
+#ifdef MHZ19_USE
 // MH-Z19
 static bool exchange_command(uint8_t cmd, uint8_t data[], int timeout)
 {
@@ -664,7 +698,7 @@ static bool read_temp_co2(int *co2, int *temp)
 void init_mhz19() {
   Serial.print(F("INIT MH-Z19: "));
   mhz19.begin(9600);  
-  delay(1500); // Wait shortly to make sure MH-Z19 is responsive
+  delay(7000); // Wait shortly to make sure MH-Z19 is responsive
   if (read_temp_co2(&mhz19_lastCO2, &mhz19_lastTemp)) {
     mhz19_ok = 1;
     Serial.println(F("found"));
@@ -678,7 +712,6 @@ void read_mhz19() {
     mhz19_lastRead = millis();
     int CO2;
     int Temp;
-    
     if (read_temp_co2(&CO2, &Temp)) {
       Serial.print("CO2: ");
       Serial.print(CO2, DEC);
@@ -687,7 +720,8 @@ void read_mhz19() {
       if (
           ((mhz19_lastSend + SENSOR_SEND_MAX_DELAY) < millis()) ||
           (abs_diff(mhz19_lastCO2, CO2) > 10) ||
-          (abs_diff(mhz19_lastTemp, Temp) > 1)
+          (abs_diff(mhz19_lastTemp, Temp) > 1) ||
+          (mhz19_lastSend == 0)  // Send always after boot
       ) {    
         SendDataToMQTT("mhz19",
           "co2", CO2,
@@ -703,7 +737,7 @@ void read_mhz19() {
     }
   }
 }
-
+#endif
 
 
 void init_ds18b20() {
@@ -770,7 +804,8 @@ void SendDataToMQTT(char const sensor[],
    */
   /* 
    *  NOTE!
-   *  For some weird reason / bug MQTT topic + json message to be send can't exceed ~121 bytes!
+   *  MQTT topic + json message to be send can't exceed ~121 bytes
+   *  unless MQTT_MAX_PACKET_SIZE is set to 256
    *  Check that message size + topic are at most 120 B.
    */
   // Serial.println("SendDataToMQTT start");
@@ -780,7 +815,7 @@ void SendDataToMQTT(char const sensor[],
   char jsonChar[256];
   JsonObject& root = jsonBuffer.createObject();
   root["sensor"] = sensor;
-  root["mac"] = mac_str; 
+  root["mac"] = mac_str;
   if (sn >= 0) {
     root["sn"] = sn;
   }
@@ -819,6 +854,7 @@ void SendStartupToMQTT(char const key1[], char const val1[]) {
   JsonObject& root = jsonBuffer.createObject();
   root[key1] = val1;
   root["mac"] = mac_str; 
+  root["rssi"] = WiFi.RSSI();
   root.printTo(jsonChar);
   msg_len = strlen(MQTT_TOPIC) + strlen(jsonChar);
   Serial.print(round_float((millis() / 1000.0), 2));
