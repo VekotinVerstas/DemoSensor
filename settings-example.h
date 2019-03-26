@@ -7,6 +7,7 @@
 #define MQTT_MAX_PACKET_SIZE 256 // For pubsubclient, default is 128 B
 
 #define SENSOR_SEND_MAX_DELAY 60000 // milliseconds, after this send data anyway even it has not changed at all
+#define STATUS_SEND_DELAY 60000
 
 // Sensor settings
 
