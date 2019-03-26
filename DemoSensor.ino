@@ -51,6 +51,7 @@
 #include <Adafruit_BME280.h>
 #include <Adafruit_BME680.h>
 #include <SparkFun_APDS9960.h>
+#include <Adafruit_MLX90614.h>
 #include <SparkFun_Si7021_Breakout_Library.h>  // https://github.com/sparkfun/Si7021_Breakout
 #include <SdsDustSensor.h>
 #include <OneWire.h>
@@ -103,6 +104,7 @@ uint16_t bh1750_lux = -1;
 uint16_t bh1750_lastLux = -1;
 
 // MLX90614 IR thermometer
+Adafruit_MLX90614 mlx = Adafruit_MLX90614();
 uint8_t mlx90614_ok = 0;
 uint32_t mlx90614_lastRead = 0;
 uint32_t mlx90614_lastSend = 0;
@@ -451,7 +453,8 @@ void read_bh1750() {
 
 void init_mlx90614() {
   Serial.print(F("INIT MLX90614: "));
-  mlx90614_object_temp = readObjectTempC(0x5A);
+  Serial.println(mlx.begin());
+  mlx90614_object_temp = mlx.readObjectTempC();
   if (mlx90614_object_temp >= -270 && mlx90614_object_temp < 1000) {
     mlx90614_ok = 1;
     Serial.print(F("found, "));
@@ -465,8 +468,12 @@ void init_mlx90614() {
 void read_mlx90614() {
   // Read MLX90614 if it has been initialised successfully and it is time to read it
   if ((mlx90614_ok == 1) && (millis() > (mlx90614_lastRead + MLX90614_SEND_DELAY))) {
-    mlx90614_object_temp = readObjectTempC(0x5A);
-    mlx90614_ambient_temp = readAmbientTempC(0x5A);
+    mlx90614_object_temp = mlx.readObjectTempC();
+    mlx90614_ambient_temp = mlx.readAmbientTempC();
+    if (mlx90614_object_temp > 1000) {
+      Serial.println("Failed to read MLX90614 object temp");
+      return;
+    }
     mlx90614_lastRead = millis();
     if (
         ((mlx90614_lastSend + SENSOR_SEND_MAX_DELAY) < millis()) ||
