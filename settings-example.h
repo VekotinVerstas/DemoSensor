@@ -33,6 +33,7 @@
 #define SDS011_RXPIN D3
 #define SDS011_TXPIN D4
 
+//#define MHZ19_USE  // Comment out if MHZ19 is not connected
 #define MHZ19_SEND_DELAY 5000 // milliseconds
 #define MHZ19_RXPIN D5
 #define MHZ19_TXPIN D6
