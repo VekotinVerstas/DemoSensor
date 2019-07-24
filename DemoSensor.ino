@@ -56,6 +56,7 @@
 #include <SdsDustSensor.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#include <max6675.h>
 #include "src/BH1750.h"           // https://github.com/claws/BH1750
 #include "src/mhz19.h"
 
@@ -173,6 +174,17 @@ uint32_t ds18b20_lastSend[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 float ds18b20_last[] = {-999.0, -999.0, -999.0, -999.0, -999.0, -999.0, -999.0, -999.0, -999.0, -999.0};
 DeviceAddress tempDs18b20Address; // We'll use this variable to store a found device address
 
+// MAX6675 thermocouple
+int thermoDO = 12;
+int thermoCS = 13;
+int thermoCLK = 14;
+MAX6675 thermocouple(thermoCLK, thermoCS, thermoDO);
+uint8_t max6675_ok = 0;
+uint32_t max6675_lastRead = 0;
+uint32_t max6675_lastSend = 0;
+float max6675_lastTemp = -999;
+
+
 float round_float(float val, int dec) {
   // Return val rounded to dec decimals
   return (int)(val * pow(10,dec) + 0.5) / 1.0 / pow(10,dec);
@@ -273,6 +285,7 @@ void init_sensors() {
   init_mhz19();
 #endif
   init_ds18b20();
+  init_max6675();
 }
 
 void read_sensors() {
@@ -289,6 +302,7 @@ void read_sensors() {
   read_mhz19();
 #endif
   read_ds18b20();
+  read_max6675();
 }
 
 void read_status() {
@@ -759,9 +773,9 @@ void read_ds18b20() {
   if ((ds18b20_ok == 1) && (millis() > (ds18b20_lastRead + DS18B20_SEND_DELAY))) {
     ds18b20_lastRead = millis();
     ds18b20_count = ds18b20.getDeviceCount();
-    Serial.print("Requesting temperatures..."); 
+    // Serial.print("Requesting temperatures..."); 
     ds18b20.requestTemperatures(); // Send the command to get temperatures
-    Serial.println("DONE");  
+    // Serial.println("DONE");  
     for (uint8_t i=0; i<ds18b20_count; i++) {
       if(ds18b20.getAddress(tempDs18b20Address, i)) {
         // set the resolution to TEMPERATURE_PRECISION bit (Each Dallas/Maxim device is capable of several different resolutions)
@@ -787,6 +801,41 @@ void read_ds18b20() {
         Serial.print(i, DEC);
         Serial.println("");
       }
+    }
+  }
+}
+
+
+void init_max6675() {
+  Serial.print(F("INIT max6675: "));
+  float temp = thermocouple.readCelsius();
+  Serial.println(temp);
+  if (temp > -100.0 && temp <= 1280.0 && temp != 0) {
+    Serial.println(F("found"));
+    max6675_ok = 1;
+  } else {
+    Serial.println(F("not found"));
+  }
+}
+
+void read_max6675() {
+  if ((max6675_ok == 1) && (millis() > (max6675_lastRead + MAX6675_SEND_DELAY))) {
+    max6675_lastRead = millis();
+    float temp = thermocouple.readCelsius();
+    if (
+        ((max6675_lastSend + SENSOR_SEND_MAX_DELAY) < millis()) ||
+        (abs_diff(max6675_lastTemp, temp) > 2) ||
+        (temp != 0)
+    ) {    
+      SendDataToMQTT("max6675",
+        "temp", round_float(temp, 2),
+        "", 0,
+        "", 0,
+        "", 0,
+        -1
+      );
+      max6675_lastSend = millis();
+      max6675_lastTemp = temp;
     }
   }
 }
