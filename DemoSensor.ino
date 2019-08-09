@@ -57,6 +57,7 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #include <max6675.h>
+#include <Adafruit_MAX31855.h>
 #include "src/BH1750.h"           // https://github.com/claws/BH1750
 #include "src/mhz19.h"
 
@@ -174,15 +175,17 @@ uint32_t ds18b20_lastSend[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 float ds18b20_last[] = {-999.0, -999.0, -999.0, -999.0, -999.0, -999.0, -999.0, -999.0, -999.0, -999.0};
 DeviceAddress tempDs18b20Address; // We'll use this variable to store a found device address
 
-// MAX6675 thermocouple
+// MAX6675 or MAX31855 thermocouple
 int thermoDO = 12;
 int thermoCS = 13;
 int thermoCLK = 14;
-MAX6675 thermocouple(thermoCLK, thermoCS, thermoDO);
+MAX6675 thermo_max6675(thermoCLK, thermoCS, thermoDO);
+Adafruit_MAX31855 thermo_max31855(thermoCLK, thermoCS, thermoDO);
 uint8_t max6675_ok = 0;
-uint32_t max6675_lastRead = 0;
-uint32_t max6675_lastSend = 0;
-float max6675_lastTemp = -999;
+uint8_t max31855_ok = 0;
+uint32_t thermo_lastRead = 0;
+uint32_t thermo_lastSend = 0;
+float thermo_lastTemp = -999;
 
 
 float round_float(float val, int dec) {
@@ -285,6 +288,7 @@ void init_sensors() {
   init_mhz19();
 #endif
   init_ds18b20();
+  init_max31855();  // This must be fefore max6675
   init_max6675();
 }
 
@@ -293,7 +297,7 @@ void read_sensors() {
   read_status();
   read_bme280();
   read_bme680();  
-  read_bh1750();  
+  read_bh1750();
   read_mlx90614();
   read_apds9960();
   read_si7021();
@@ -302,6 +306,7 @@ void read_sensors() {
   read_mhz19();
 #endif
   read_ds18b20();
+  read_max31855();
   read_max6675();
 }
 
@@ -807,8 +812,12 @@ void read_ds18b20() {
 
 
 void init_max6675() {
+  if (max6675_ok == -1) {
+    Serial.println(F("DO NOT initialize max6675 because 31855 is already found "));
+    return;
+  }
   Serial.print(F("INIT max6675: "));
-  float temp = thermocouple.readCelsius();
+  float temp = thermo_max6675.readCelsius();
   Serial.println(temp);
   if (temp > -100.0 && temp <= 1280.0 && temp != 0) {
     Serial.println(F("found"));
@@ -819,13 +828,13 @@ void init_max6675() {
 }
 
 void read_max6675() {
-  if ((max6675_ok == 1) && (millis() > (max6675_lastRead + MAX6675_SEND_DELAY))) {
-    max6675_lastRead = millis();
-    float temp = thermocouple.readCelsius();
+  if ((max6675_ok == 1) && (millis() > (thermo_lastRead + THERMO_SEND_DELAY))) {
+    thermo_lastRead = millis();
+    float temp = thermo_max6675.readCelsius();
     if (
-        ((max6675_lastSend + SENSOR_SEND_MAX_DELAY) < millis()) ||
-        (abs_diff(max6675_lastTemp, temp) > 2) ||
-        (temp != 0)
+        ((thermo_lastSend + SENSOR_SEND_MAX_DELAY) < millis()) ||
+        ((abs_diff(thermo_lastTemp, temp) > 2) &&
+        (temp != 0))
     ) {    
       SendDataToMQTT("max6675",
         "temp", round_float(temp, 2),
@@ -834,11 +843,48 @@ void read_max6675() {
         "", 0,
         -1
       );
-      max6675_lastSend = millis();
-      max6675_lastTemp = temp;
+      thermo_lastSend = millis();
+      thermo_lastTemp = temp;
     }
   }
 }
+
+void init_max31855() {
+  Serial.print(F("INIT max31855: "));
+  float temp = thermo_max31855.readInternal();
+  Serial.println(temp);
+  if (temp > -100.0 && temp <= 1350.0 && temp != 0) {
+    Serial.println(F("found"));
+    max31855_ok = 1;
+    max6675_ok = -1;  // max6675 library detects max31855, so we disable init_max6675() here
+  } else {
+    Serial.println(F("not found"));
+  }
+}
+
+void read_max31855() {
+  if ((max31855_ok == 1) && (millis() > (thermo_lastRead + THERMO_SEND_DELAY))) {
+    thermo_lastRead = millis();
+    float temp_out = thermo_max31855.readCelsius();
+    float temp_in = thermo_max31855.readInternal();
+    if (
+        ((thermo_lastSend + SENSOR_SEND_MAX_DELAY) < millis()) ||
+        ((abs_diff(thermo_lastTemp, temp_out) > 1) &&
+        (temp_out != 0))
+    ) {    
+      SendDataToMQTT("max31855",
+        "temp_out", round_float(temp_out, 2),
+        "temp_in", round_float(temp_in, 2),
+        "", 0,
+        "", 0,
+        -1
+      );
+      thermo_lastSend = millis();
+      thermo_lastTemp = temp_out;
+    }
+  }
+}
+
 
 
 void SendDataToMQTT(char const sensor[], 
