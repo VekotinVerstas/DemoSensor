@@ -14,10 +14,11 @@
    - Si7021 temperature / humidity sensor
    - SDS011 PM2.5/PM10 (Particle matter) sensor
    - MHZ19 CO2 sensor 
+   - Dallas DS18B20
+   - MAX6675 & MAX31855 K-type thermocouple chips
    TODO:
    - a button or any device which creates interrupts
    - APDS-9960 gestures
-   - Dallas DS18B20
 
   NOTE
   You must install libraries below using Arduino IDE's 
@@ -812,18 +813,18 @@ void read_ds18b20() {
 
 
 void init_max6675() {
-  if (max6675_ok == -1) {
+  if (max6675_ok == 255) {
     Serial.println(F("DO NOT initialize max6675 because 31855 is already found "));
     return;
   }
   Serial.print(F("INIT max6675: "));
   float temp = thermo_max6675.readCelsius();
-  Serial.println(temp);
+  Serial.print(temp);
   if (temp > -100.0 && temp <= 1280.0 && temp != 0) {
-    Serial.println(F("found"));
+    Serial.println(F(" found"));
     max6675_ok = 1;
   } else {
-    Serial.println(F("not found"));
+    Serial.println(F(" not found"));
   }
 }
 
@@ -852,13 +853,13 @@ void read_max6675() {
 void init_max31855() {
   Serial.print(F("INIT max31855: "));
   float temp = thermo_max31855.readInternal();
-  Serial.println(temp);
+  Serial.print(temp);
   if (temp > -100.0 && temp <= 1350.0 && temp != 0) {
-    Serial.println(F("found"));
+    Serial.println(F(" found"));
     max31855_ok = 1;
-    max6675_ok = -1;  // max6675 library detects max31855, so we disable init_max6675() here
+    max6675_ok = 255;  // max6675 library detects max31855, so we disable init_max6675() here
   } else {
-    Serial.println(F("not found"));
+    Serial.println(F(" not found"));
   }
 }
 
