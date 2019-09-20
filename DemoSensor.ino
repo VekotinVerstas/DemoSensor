@@ -54,11 +54,16 @@
 #include <SparkFun_APDS9960.h>
 #include <Adafruit_MLX90614.h>
 #include <SparkFun_Si7021_Breakout_Library.h>  // https://github.com/sparkfun/Si7021_Breakout
+#ifdef SDS011_USE
 #include <SdsDustSensor.h>
+#endif
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#ifdef THERMO_USE
 #include <max6675.h>
 #include <Adafruit_MAX31855.h>
+#endif
+#include <Adafruit_SHT31.h>
 #include "src/BH1750.h"           // https://github.com/claws/BH1750
 #include "src/mhz19.h"
 
@@ -86,10 +91,12 @@ uint32_t status_lastSend = 0;
 
 // Buttons (digital HIGH / LOW)
 // PUSHBUTTON_1 and PUSHBUTTON_1 in settings.h
+#ifdef BUTTON_USE
 uint32_t pushButton1_lastRead = 0;
 uint32_t pushButton1_lastSend = 0;
 float pushButton1_lastState = 0;
 float pushButton2_lastState = 0;
+#endif
 
 // BME680 AQ sensor
 Adafruit_BME680 bme680;
@@ -148,13 +155,14 @@ float bme280_lastPres = -999;
 
 // SDS011 PM sensor
 // SDS011 Software serial settings
-// TODO: Explicitly configure if is SDS011 present.
+#ifdef SDS011_USE
 SdsDustSensor sds011(SDS011_RXPIN, SDS011_TXPIN);
 uint8_t sds011_ok = 0;
 uint32_t sds011_lastRead = 0;
 uint32_t sds011_lastSend = 0;
 float sds011_lastPM25 = -1.0;
 float sds011_lastPM10 = -1.0;
+#endif
 
 #ifdef MHZ19_USE
 SoftwareSerial mhz19(MHZ19_RXPIN, MHZ19_TXPIN);
@@ -177,6 +185,7 @@ float ds18b20_last[] = {-999.0, -999.0, -999.0, -999.0, -999.0, -999.0, -999.0, 
 DeviceAddress tempDs18b20Address; // We'll use this variable to store a found device address
 
 // MAX6675 or MAX31855 thermocouple
+#ifdef THERMO_USE
 int thermoDO = 12;
 int thermoCS = 13;
 int thermoCLK = 14;
@@ -187,6 +196,7 @@ uint8_t max31855_ok = 0;
 uint32_t thermo_lastRead = 0;
 uint32_t thermo_lastSend = 0;
 float thermo_lastTemp = -999;
+#endif
 
 
 // SHT31 temperature and humidity sensor
@@ -293,25 +303,33 @@ void loop() {
 }
 
 void init_sensors() {
-  // init_pushButton();
+#ifdef BUTTON_USE  
+  init_pushButton();
+#endif
   init_bme280();
   init_bme680();
   init_bh1750();
   init_mlx90614();
   init_apds9960();
   init_si7021();
+#ifdef SDS011_USE  
   init_sds011();
+#endif
 #ifdef MHZ19_USE
   init_mhz19();
 #endif
   init_ds18b20();
+#ifdef THERMO_USE  
   init_max31855();  // This must be fefore max6675
   init_max6675();
+#endif  
   init_sht31();
 }
 
 void read_sensors() {
-  // read_pushButton();
+#ifdef BUTTON_USE  
+  read_pushButton();
+#endif
   read_status();
   read_bme280();
   read_bme680();  
@@ -319,13 +337,17 @@ void read_sensors() {
   read_mlx90614();
   read_apds9960();
   read_si7021();
+#ifdef SDS011_USE  
   read_sds011();
+#endif  
 #ifdef MHZ19_USE
   read_mhz19();
 #endif
   read_ds18b20();
+#ifdef THERMO_USE  
   read_max31855();
   read_max6675();
+#endif  
   read_sht31();
 }
 
@@ -348,7 +370,7 @@ void read_status() {
   }
 }
 
-
+#ifdef BUTTON_USE  
 void init_pushButton() {
   Serial.println(F("INIT Pushbutton "));
   pinMode(PUSHBUTTON_1, INPUT);
@@ -388,7 +410,7 @@ void read_pushButton() {
     pushButton2_lastState = buttonState2;
   }
 }
-
+#endif
 
 void init_bme280() {
   Serial.print(F("INIT BME280: "));
@@ -672,10 +694,12 @@ void read_sds011() {
     if (pm.isOk()) {
       float pm25 = pm.pm25;
       float pm10 = pm.pm10;
-      Serial.print("PM2.5 = ");
-      Serial.print(pm25);
-      Serial.print(", PM10 = ");
-      Serial.println(pm10);
+      if (millis() < 200000) {  // debug print if just rebooted
+        Serial.print("PM2.5 = ");
+        Serial.print(pm25);
+        Serial.print(", PM10 = ");
+        Serial.println(pm10);
+      }
       if (
           ((sds011_lastSend + SENSOR_SEND_MAX_DELAY) < millis()) ||
           (abs_diff(sds011_lastPM25, pm25) > 0.3) ||
@@ -829,7 +853,7 @@ void read_ds18b20() {
   }
 }
 
-
+#ifdef THERMO_USE
 void init_max6675() {
   if (max6675_ok == 255) {
     Serial.println(F("DO NOT initialize max6675 because 31855 is already found "));
@@ -903,6 +927,7 @@ void read_max31855() {
     }
   }
 }
+#endif
 
 void init_sht31() {
   Serial.print(F("INIT sht31: "));
@@ -969,6 +994,9 @@ void SendDataToMQTT(char const sensor[],
   if (sn >= 0) {
     root["sn"] = sn;
   }
+#ifdef BURK_ID
+  root["id"] = BURK_ID;
+#endif  
   JsonObject& data = root.createNestedObject("data");
   if (type1[0] != 0) { data[type1] = val1; }
   if (type2[0] != 0) { data[type2] = val2; }
