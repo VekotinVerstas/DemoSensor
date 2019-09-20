@@ -189,6 +189,15 @@ uint32_t thermo_lastSend = 0;
 float thermo_lastTemp = -999;
 
 
+// SHT31 temperature and humidity sensor
+Adafruit_SHT31 sht31;
+uint8_t sht31_ok = 0;
+uint32_t sht31_lastRead = 0;
+uint32_t sht31_lastSend = 0;
+float sht31_lastHumi = -999;
+float sht31_lastTemp = -999;
+
+
 float round_float(float val, int dec) {
   // Return val rounded to dec decimals
   return (int)(val * pow(10,dec) + 0.5) / 1.0 / pow(10,dec);
@@ -291,6 +300,7 @@ void init_sensors() {
   init_ds18b20();
   init_max31855();  // This must be fefore max6675
   init_max6675();
+  init_sht31();
 }
 
 void read_sensors() {
@@ -309,6 +319,7 @@ void read_sensors() {
   read_ds18b20();
   read_max31855();
   read_max6675();
+  read_sht31();
 }
 
 void read_status() {
@@ -882,6 +893,42 @@ void read_max31855() {
       );
       thermo_lastSend = millis();
       thermo_lastTemp = temp_out;
+    }
+  }
+}
+
+void init_sht31() {
+  Serial.print(F("INIT sht31: "));
+  sht31.begin(0x44);
+  float humidity = sht31.readHumidity();
+  if (humidity > 0.0 && humidity <= 100.0) {
+    // Serial.println(F("found"));
+    sht31_ok = 1;
+  } else {
+    // Serial.println(F("not found"));
+  }
+}
+
+void read_sht31() {
+  if ((sht31_ok == 1) && (millis() > (sht31_lastRead + SHT31_SEND_DELAY))) {
+    sht31_lastRead = millis();
+    float humi = sht31.readHumidity();
+    float temp = sht31.readTemperature();
+    if (
+        ((sht31_lastSend + SENSOR_SEND_MAX_DELAY) < millis()) ||
+        (abs_diff(sht31_lastTemp, temp) > 0.2) ||
+        (abs_diff(sht31_lastHumi, humi) > 1.0)
+    ) {    
+      SendDataToMQTT("sht31",
+        "temp", round_float(temp, 2),
+        "humi", round_float(humi, 2),
+        "", 0,
+        "", 0,
+        -1
+      );
+      sht31_lastSend = millis();
+      sht31_lastTemp = temp;
+      sht31_lastHumi = humi;
     }
   }
 }
