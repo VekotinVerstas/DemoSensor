@@ -256,7 +256,14 @@ void setup() {
   lastMqttMsgTime = millis();
   init_sensors();
   char ap_name[30];
+// Define AP_PREFIX, BURK_ID in settings.h!
+#ifdef AP_PREFIX
+#ifdef BURK_ID
+  sprintf(ap_name, "%s_%s", AP_PREFIX, BURK_ID);
+#endif
+#else
   sprintf(ap_name, "SensorDemo_%d", ESP.getChipId());
+#endif
   Serial.print("AP name would be: ");
   Serial.println(ap_name);
   wifiManager.setConfigPortalTimeout(180);
