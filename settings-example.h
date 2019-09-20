@@ -2,6 +2,8 @@
 #define AP_PREFIX "AQBURK"
 // BURK_ID - change this in every device!!!
 #define BURK_ID "800001"
+// Software version is YYMMDD (float)
+#define DS_VERSION 190920
 
 // MQTT settings
 #define MQTT_TOPIC "demosensor"
