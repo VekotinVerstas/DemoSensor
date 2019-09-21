@@ -34,7 +34,7 @@
 
 // BME680
 #define BME680_HEATING_TIME 150 // milliseconds
-#define BME680_SEND_DELAY 10000 // milliseconds
+#define BME680_SEND_DELAY 60000 // milliseconds
 
 // Dallas DS18B20 settings
 #define DS18B20_SEND_DELAY 2000 // milliseconds
