@@ -46,6 +46,7 @@
 #include <DNSServer.h>            // Local DNS Server used for redirecting all requests to the configuration portal
 #include <ESP8266WebServer.h>     // Local WebServer used to serve the configuration portal
 #include <WiFiManager.h>          // https://github.com/tzapu/WiFiManager WiFi Configuration Magic
+#include <ESP8266HTTPClient.h>
 
 // Sensor support libraries
 #include <Adafruit_Sensor.h>
@@ -75,6 +76,9 @@ void callback(char* topic, byte* payload, unsigned int length) {
   // handle message arrived
   // Serial.println(payload);
 }
+
+
+HTTPClient http;    //Declare object of class HTTPClient
 
 // Define and set up all variables / objects
 WiFiClient wifiClient;
@@ -247,7 +251,7 @@ void MqttSetup() {
     Serial.println("Connected to MQTT broker");
     Serial.print("Topic is: ");
     Serial.println(MQTT_TOPIC);
-    SendStartupToMQTT("version", "0.2.1");
+    SendStartupToMQTT("version", DS_VERSION);
   }
   else {
     Serial.println("MQTT connect failed");
@@ -360,7 +364,7 @@ void read_status() {
     status_lastSend = millis();
     long rssi = WiFi.RSSI();
     long uptime = millis();
-    SendDataToMQTT("status", 
+    SendDataToNet("status", 
         "rssi", rssi,
         "uptime", uptime,
         "", 0,
@@ -397,7 +401,7 @@ void read_pushButton() {
          pushButton2_lastState != buttonState2)
     ) {
       pushButton1_lastSend = millis();
-      SendDataToMQTT("button", 
+      SendDataToNet("button", 
         "b1", buttonState1,
         "b2", buttonState2,
         "", 0,
@@ -440,7 +444,7 @@ void read_bme280() {
         
     ) {
       bme280_lastSend = millis();
-      SendDataToMQTT("bme280", 
+      SendDataToNet("bme280", 
         "temp", round_float(temp, 2),
         "humi", round_float(humi, 1),
         "pres", round_float(pres, 2),
@@ -490,7 +494,7 @@ void read_bme680() {
           (abs_diff(bme680_lastPres, pres) > 0.2) ||
           (abs_diff(bme680_lastGas, gas) > 3.0)
       ) {
-        SendDataToMQTT("bme680",
+        SendDataToNet("bme680",
           "temp", round_float(temp, 2),
           "humi", round_float(humi, 1),
           "pres", round_float(pres, 2),
@@ -530,7 +534,7 @@ void read_bh1750() {
         ((bh1750_lastSend + SENSOR_SEND_MAX_DELAY) < millis()) ||
         (log10_diff(bh1750_lastLux, lux) > 0.05)
     ) {  
-      SendDataToMQTT("bh1750", 
+      SendDataToNet("bh1750", 
         "lux", lux,
         "", 0,
         "", 0,
@@ -545,7 +549,7 @@ void read_bh1750() {
 
 void init_mlx90614() {
   Serial.print(F("INIT MLX90614: "));
-  Serial.println(mlx.begin());
+  mlx.begin();
   mlx90614_object_temp = mlx.readObjectTempC();
   if (mlx90614_object_temp >= -270 && mlx90614_object_temp < 1000) {
     mlx90614_ok = 1;
@@ -572,7 +576,7 @@ void read_mlx90614() {
         (abs_diff(mlx90614_object_lastTemp, mlx90614_object_temp) > 0.2) ||
         (abs_diff(mlx90614_ambient_lastTemp, mlx90614_ambient_temp) > 0.2) 
     ) {    
-      SendDataToMQTT("mlx90614", 
+      SendDataToNet("mlx90614", 
         "obtemp", round_float(mlx90614_object_temp, 2),
         "amtemp", round_float(mlx90614_ambient_temp, 2),
         "", 0,
@@ -619,7 +623,7 @@ void read_apds9960() {
         (abs_diff(apds9960_lastB, b) > 1.0) ||
         (abs_diff(apds9960_lastA, a) > 2.0)
     ) {    
-      SendDataToMQTT("apds9960",
+      SendDataToNet("apds9960",
         "r", r,
         "g", g,
         "b", b,
@@ -657,7 +661,7 @@ void read_si7021() {
         (abs_diff(si7021_lastTemp, temp) > 0.2) ||
         (abs_diff(si7021_lastHumi, humi) > 1.0)
     ) {    
-      SendDataToMQTT("si7021",
+      SendDataToNet("si7021",
         "temp", round_float(temp, 2),
         "humi", round_float(humi, 2),
         "", 0,
@@ -671,6 +675,7 @@ void read_si7021() {
   }
 }
 
+#ifdef SDS011_USE
 void init_sds011() {
   Serial.print(F("INIT sds011: "));
   sds011.begin();
@@ -706,7 +711,7 @@ void read_sds011() {
           (abs_diff(sds011_lastPM10, pm10) > 0.3) ||
           (sds011_lastSend == 0)
       ) {    
-        SendDataToMQTT("sds011",
+        SendDataToNet("sds011",
           "pm25", pm25,
           "pm10", pm10,
           "", 0,
@@ -720,6 +725,7 @@ void read_sds011() {
     }
   }
 }
+#endif
 
 #ifdef MHZ19_USE
 // MH-Z19
@@ -785,7 +791,7 @@ void read_mhz19() {
           (abs_diff(mhz19_lastTemp, Temp) > 1) ||
           (mhz19_lastSend == 0)  // Send always after boot
       ) {    
-        SendDataToMQTT("mhz19",
+        SendDataToNet("mhz19",
           "co2", CO2,
           "temp", Temp,
           "", 0,
@@ -834,7 +840,7 @@ void read_ds18b20() {
             ((ds18b20_lastSend[i] + SENSOR_SEND_MAX_DELAY) < millis()) ||
             (abs_diff(ds18b20_last[i], tempC) > 0.2)
         ) {        
-          SendDataToMQTT("ds18b20",
+          SendDataToNet("ds18b20",
             "temp", tempC,
             "", 0,
             "", 0,
@@ -879,7 +885,7 @@ void read_max6675() {
         ((abs_diff(thermo_lastTemp, temp) > 2) &&
         (temp != 0))
     ) {    
-      SendDataToMQTT("max6675",
+      SendDataToNet("max6675",
         "temp", round_float(temp, 2),
         "", 0,
         "", 0,
@@ -915,7 +921,7 @@ void read_max31855() {
         ((abs_diff(thermo_lastTemp, temp_out) > 1) &&
         (temp_out != 0))
     ) {    
-      SendDataToMQTT("max31855",
+      SendDataToNet("max31855",
         "temp_out", round_float(temp_out, 2),
         "temp_in", round_float(temp_in, 2),
         "", 0,
@@ -934,10 +940,10 @@ void init_sht31() {
   sht31.begin(0x44);
   float humidity = sht31.readHumidity();
   if (humidity > 0.0 && humidity <= 100.0) {
-    // Serial.println(F("found"));
+    Serial.println(F("found"));
     sht31_ok = 1;
   } else {
-    // Serial.println(F("not found"));
+    Serial.println(F("not found"));
   }
 }
 
@@ -951,7 +957,7 @@ void read_sht31() {
         (abs_diff(sht31_lastTemp, temp) > 0.2) ||
         (abs_diff(sht31_lastHumi, humi) > 1.0)
     ) {    
-      SendDataToMQTT("sht31",
+      SendDataToNet("sht31",
         "temp", round_float(temp, 2),
         "humi", round_float(humi, 2),
         "", 0,
@@ -966,25 +972,17 @@ void read_sht31() {
 }
 
 
-
-void SendDataToMQTT(char const sensor[], 
-                    char const type1[], float val1, 
-                    char const type2[], float val2, 
-                    char const type3[], float val3, 
-                    char const type4[], float val4,
-                    int16_t sn) {
+void CreateJsonPayload(char * payload,
+                       char const sensor[], 
+                       char const type1[], float val1, 
+                       char const type2[], float val2, 
+                       char const type3[], float val3, 
+                       char const type4[], float val4,
+                       int16_t sn) {
   /**
-   * Send data to the MQTT broker. Currently max 4 key/value pairs are supported. 
+   * Generate JSON payload which can the be sent using MQTT or HTTP
    * If you set typeX argument empty (""), if will be left out from the payload.
    */
-  /* 
-   *  NOTE!
-   *  MQTT topic + json message to be send can't exceed ~121 bytes
-   *  unless MQTT_MAX_PACKET_SIZE is set to 256
-   *  Check that message size + topic are at most 120 B.
-   */
-  // Serial.println("SendDataToMQTT start");
-  // StaticJsonBuffer<512> jsonBuffer;
   uint16_t msg_len = 0;
   DynamicJsonBuffer jsonBuffer(512);
   char jsonChar[256];
@@ -1003,6 +1001,36 @@ void SendDataToMQTT(char const sensor[],
   if (type3[0] != 0) { data[type3] = val3; }
   if (type4[0] != 0) { data[type4] = val4; }
   root.printTo(jsonChar);
+  memcpy(payload, jsonChar, sizeof(jsonChar[0])*strlen(jsonChar));
+  payload[strlen(jsonChar)] = '\0';
+}
+
+void SendDataToNet(char const sensor[], 
+                    char const type1[], float val1, 
+                    char const type2[], float val2, 
+                    char const type3[], float val3, 
+                    char const type4[], float val4,
+                    int16_t sn) {
+  /**
+   * Send data to the MQTT broker. Currently max 4 key/value pairs are supported. 
+   * If you set typeX argument empty (""), if will be left out from the payload.
+   */
+  /* 
+   *  NOTE!
+   *  MQTT topic + json message to be send can't exceed ~121 bytes
+   *  unless MQTT_MAX_PACKET_SIZE is set to 256
+   *  Check that message size + topic are at most 120 B.
+   */
+  char jsonChar[256];
+  uint16_t msg_len = 0;
+  CreateJsonPayload(jsonChar,
+                    sensor, 
+                    type1, val1, 
+                    type2, val2, 
+                    type3, val3, 
+                    type4, val4, 
+                    sn);
+#ifdef MQTT_SERVER
   msg_len = strlen(MQTT_TOPIC) + strlen(jsonChar);
   Serial.print(round_float((millis() / 1000.0), 2));
   Serial.print("s ");
@@ -1019,21 +1047,26 @@ void SendDataToMQTT(char const sensor[],
   } else {
     Serial.println("Error: Publishing MQTT message failed.");
   }
+#endif  
+#ifdef BACKEND_URL
+  SendDataToHttp(jsonChar);
+#endif  
 }
 
 
-void SendStartupToMQTT(char const key1[], char const val1[]) {
+void SendStartupToMQTT(char const key1[], float val1) {
   /**
    * Send startup message to the MQTT broker.
    */
-  uint16_t msg_len = 0;
-  DynamicJsonBuffer jsonBuffer(512);
   char jsonChar[256];
-  JsonObject& root = jsonBuffer.createObject();
-  root[key1] = val1;
-  root["mac"] = mac_str; 
-  root["rssi"] = WiFi.RSSI();
-  root.printTo(jsonChar);
+  uint16_t msg_len = 0;
+  CreateJsonPayload(jsonChar,
+                    "status", 
+                    key1, val1, 
+                    "", 0, 
+                    "", 0, 
+                    "", 0, 
+                    -1);  
   msg_len = strlen(MQTT_TOPIC) + strlen(jsonChar);
   Serial.print(round_float((millis() / 1000.0), 2));
   Serial.print("s ");
@@ -1050,4 +1083,27 @@ void SendStartupToMQTT(char const key1[], char const val1[]) {
   } else {
     Serial.println("Error: Publishing MQTT message failed.");
   }
+#ifdef BACKEND_URL
+  SendDataToHttp(jsonChar);
+#endif
+}
+
+
+void SendDataToHttp(char * jsonChar) {
+#ifdef BACKEND_URL
+  Serial.print("Making HTTP POST request to: " );
+  Serial.println(BACKEND_URL);
+  http.begin(wifiClient, BACKEND_URL);                 // Specify request destination
+  http.addHeader("Content-Type", "application/json");  // Specify content-type header
+  int httpCode = http.POST(jsonChar);   // Send the request
+  String payload = http.getString();    // Get the response payload
+  if (httpCode < 0) {
+    Serial.println("Connection failed");
+  } else {
+    Serial.print("Server responed with code: " );
+    Serial.println(httpCode);   // Print HTTP return code
+    Serial.println(payload);    // Print request response payload
+  }
+  http.end();  //Close connection
+#endif  
 }

@@ -3,7 +3,7 @@
 // BURK_ID - make this different for every device!!! Will be shown as a part of AP name
 #define BURK_ID "800001"
 // Software version is YYMMDD (float). Increase this when doing new revisions of code
-#define DS_VERSION 190920
+#define DS_VERSION 190922
 
 /************************************************************************************************
  * Connectivity settings
