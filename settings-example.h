@@ -51,7 +51,11 @@
 #define APDS9960_SEND_DELAY 1000  // milliseconds
 #define SI7021_SEND_DELAY 1000  // milliseconds
 #define BME280_SEND_DELAY 1000 // milliseconds
-#define SHT31_SEND_DELAY 1000  // milliseconds
+
+// SHT3x
+#define SHT3x_SEND_DELAY 1000  // milliseconds
+#define SHT3x_ADDR 0x45  // 0x45: wemos SHD30 sheild, 0x44 aliexpress SHT31
+#define SHT3x_TYPE "sht30"  // Use sht30, sht31, sht35 etc. respectively
 
 // BME680
 #define BME680_HEATING_TIME 150 // milliseconds

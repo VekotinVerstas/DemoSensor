@@ -16,6 +16,8 @@
    - MHZ19 CO2 sensor 
    - Dallas DS18B20
    - MAX6675 & MAX31855 K-type thermocouple chips
+   - SHT3x temperature / humidity sensor
+
    TODO:
    - a button or any device which creates interrupts
    - APDS-9960 gestures
@@ -204,12 +206,12 @@ float thermo_lastTemp = -999;
 
 
 // SHT31 temperature and humidity sensor
-Adafruit_SHT31 sht31;
-uint8_t sht31_ok = 0;
-uint32_t sht31_lastRead = 0;
-uint32_t sht31_lastSend = 0;
-float sht31_lastHumi = -999;
-float sht31_lastTemp = -999;
+Adafruit_SHT31 sht3x;
+uint8_t sht3x_ok = 0;
+uint32_t sht3x_lastRead = 0;
+uint32_t sht3x_lastSend = 0;
+float sht3x_lastHumi = -999;
+float sht3x_lastTemp = -999;
 
 
 float round_float(float val, int dec) {
@@ -327,7 +329,7 @@ void init_sensors() {
   init_max31855();  // This must be fefore max6675
   init_max6675();
 #endif  
-  init_sht31();
+  init_sht3x();
 }
 
 void read_sensors() {
@@ -352,7 +354,7 @@ void read_sensors() {
   read_max31855();
   read_max6675();
 #endif  
-  read_sht31();
+  read_sht3x();
 }
 
 void read_status() {
@@ -935,38 +937,38 @@ void read_max31855() {
 }
 #endif
 
-void init_sht31() {
-  Serial.print(F("INIT sht31: "));
-  sht31.begin(0x44);
-  float humidity = sht31.readHumidity();
+void init_sht3x() {
+  Serial.print(F("INIT sht3x: "));
+  sht3x.begin(SHT3X_ADDR);
+  float humidity = sht3x.readHumidity();
   if (humidity > 0.0 && humidity <= 100.0) {
     Serial.println(F("found"));
-    sht31_ok = 1;
+    sht3x_ok = 1;
   } else {
     Serial.println(F("not found"));
   }
 }
 
-void read_sht31() {
-  if ((sht31_ok == 1) && (millis() > (sht31_lastRead + SHT31_SEND_DELAY))) {
-    sht31_lastRead = millis();
-    float humi = sht31.readHumidity();
-    float temp = sht31.readTemperature();
+void read_sht3x() {
+  if ((sht3x_ok == 1) && (millis() > (sht3x_lastRead + SHT3X_SEND_DELAY))) {
+    sht3x_lastRead = millis();
+    float humi = sht3x.readHumidity();
+    float temp = sht3x.readTemperature();
     if (
-        ((sht31_lastSend + SENSOR_SEND_MAX_DELAY) < millis()) ||
-        (abs_diff(sht31_lastTemp, temp) > 0.2) ||
-        (abs_diff(sht31_lastHumi, humi) > 1.0)
+        ((sht3x_lastSend + SENSOR_SEND_MAX_DELAY) < millis()) ||
+        (abs_diff(sht3x_lastTemp, temp) > 0.2) ||
+        (abs_diff(sht3x_lastHumi, humi) > 1.0)
     ) {    
-      SendDataToNet("sht31",
+      SendDataToNet(SHT3X_TYPE,
         "temp", round_float(temp, 2),
         "humi", round_float(humi, 2),
         "", 0,
         "", 0,
         -1
       );
-      sht31_lastSend = millis();
-      sht31_lastTemp = temp;
-      sht31_lastHumi = humi;
+      sht3x_lastSend = millis();
+      sht3x_lastTemp = temp;
+      sht3x_lastHumi = humi;
     }
   }
 }
