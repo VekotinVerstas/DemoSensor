@@ -1,5 +1,5 @@
 // AP name prefix, shown when sensor is connected to new WiFi
-#define AP_PREFIX "AQBURK"
+#define AP_PREFIX "DEMOSENSOR"
 // BURK_ID - make this different for every device!!! Will be shown as a part of AP name
 #define BURK_ID "800001"
 // Software version is YYMMDD (float). Increase this when doing new revisions of code
@@ -38,6 +38,11 @@
 #define STATUS_SEND_DELAY 60000
 
 // Sensor settings
+
+// I2C settings
+// Most boards use D1 and D2, also numbered as 4 and 5.
+#define SDA     D2
+#define SCL     D1
 
 // Buttons (digital HIGH / LOW)
 // #define BUTTON_USE  // Comment out if there are no button-like sensors

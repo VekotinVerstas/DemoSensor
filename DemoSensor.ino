@@ -70,15 +70,11 @@
 #include "src/BH1750.h"           // https://github.com/claws/BH1750
 #include "src/mhz19.h"
 
-// I2C settings
-#define SDA     D2
-#define SCL     D1
-
+// Currently unused MQTT subscribe callback
 void callback(char* topic, byte* payload, unsigned int length) {
   // handle message arrived
   // Serial.println(payload);
 }
-
 
 HTTPClient http;    //Declare object of class HTTPClient
 
@@ -1032,22 +1028,25 @@ void SendDataToNet(char const sensor[],
                     type3, val3, 
                     type4, val4, 
                     sn);
+  Serial.print("Preparing to send: ");
+  Serial.println(jsonChar);
 #ifdef MQTT_SERVER
   msg_len = strlen(MQTT_TOPIC) + strlen(jsonChar);
+  Serial.print("MQTT ");
   Serial.print(round_float((millis() / 1000.0), 2));
   Serial.print("s ");
   Serial.print(msg_len);
   Serial.print("B ");
   Serial.print(MQTT_TOPIC);
-  Serial.print(" ");
-  Serial.println(jsonChar);
+  Serial.print(". ");
   if (msg_len > 120) {
     Serial.println("Warning: TOPIC + JSON > 120 bytes.");
   }
   if (client.publish(MQTT_TOPIC, jsonChar)) {
     lastMqttMsgTime = millis();
+    Serial.println("Done.");
   } else {
-    Serial.println("Error: Publishing MQTT message failed.");
+    Serial.println("Failed.");
   }
 #endif  
 #ifdef BACKEND_URL
