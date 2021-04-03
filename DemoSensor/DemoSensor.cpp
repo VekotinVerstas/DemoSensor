@@ -42,6 +42,7 @@
 
 #include "settings.h"             // Remember to copy settings-example.h to settings.h and check all values!
 #include <Wire.h>
+#include "SoftwareSerial.h"
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 #include <ESP8266WiFi.h>
@@ -54,7 +55,7 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
 #include <Adafruit_BME680.h>
-#include <SparkFun_APDS9960.h>
+//#include <SparkFun_APDS9960.h>
 #include <Adafruit_MLX90614.h>
 #include <SparkFun_Si7021_Breakout_Library.h>  // https://github.com/sparkfun/Si7021_Breakout
 #ifdef SDS011_USE
@@ -70,11 +71,61 @@
 #include "src/BH1750.h"           // https://github.com/claws/BH1750
 #include "src/mhz19.h"
 
+
+float round_float(float val, int dec);
+float abs_diff(float a, float b);
+float log10_diff(float a, float b);
+void MqttSetup();
+//void setup();
+//void loop();
+void init_sensors();
+void read_sensors();
+void read_status();
+void init_pushButton();
+void read_pushButton();
+void init_bme280();
+void read_bme280();
+void init_bme680();
+void read_bme680();
+void init_bh1750();
+void read_bh1750();
+void init_mlx90614();
+void read_mlx90614();
+void init_apds9960();
+void read_apds9960();
+void init_si7021();
+void read_si7021();
+void init_sds011();
+void read_sds011();
+void init_mhz19();
+void read_mhz19();
+void init_ds18b20();
+void read_ds18b20();
+void init_max6675();
+void read_max6675();
+void init_max31855();
+void read_max31855();
+void init_sht3x();
+void read_sht3x();
+void CreateJsonPayload(char * payload);
+void SendDataToNet(char const sensor[],
+                    char const type1[], float val1, 
+                    char const type2[], float val2, 
+                    char const type3[], float val3, 
+                    char const type4[], float val4,
+                    int16_t sn); 
+void SendStartupToMQTT(char const key1[], float val1);
+void SendDataToHttp(char * jsonChar);
+
+
+
 // Currently unused MQTT subscribe callback
 void callback(char* topic, byte* payload, unsigned int length) {
   // handle message arrived
   // Serial.println(payload);
 }
+
+#define MQTT_MAX_PACKET_SIZE 256 // For pubsubclient, default is 128 B
 
 HTTPClient http;    //Declare object of class HTTPClient
 
@@ -92,12 +143,13 @@ uint32_t status_lastRead = 0;
 uint32_t status_lastSend = 0;
 
 // Buttons (digital HIGH / LOW)
-// PUSHBUTTON_1 and PUSHBUTTON_1 in settings.h
+// PUSHBUTTON_1 and PUSHBUTTON_2 and PUSHBUTTON_3 in settings.h
 #ifdef BUTTON_USE
 uint32_t pushButton1_lastRead = 0;
 uint32_t pushButton1_lastSend = 0;
 float pushButton1_lastState = 0;
 float pushButton2_lastState = 0;
+float pushButton3_lastState = 0;
 #endif
 
 // BME680 AQ sensor
@@ -129,6 +181,7 @@ float mlx90614_ambient_lastTemp = -273.15;
 float mlx90614_object_lastTemp = -273.15;
 
 // APDS9960 RGB and gesture sensor
+/*
 SparkFun_APDS9960 apds9960 = SparkFun_APDS9960();
 uint8_t apds9960_ok = 0;
 uint32_t apds9960_lastRead = 0;
@@ -137,6 +190,7 @@ uint32_t apds9960_lastR = -999;
 uint32_t apds9960_lastG = -999;
 uint32_t apds9960_lastB = -999;
 uint32_t apds9960_lastA = -999;
+*/
 
 // Si7021 temperature and humidity sensor
 Weather si7021;
@@ -188,9 +242,13 @@ DeviceAddress tempDs18b20Address; // We'll use this variable to store a found de
 
 // MAX6675 or MAX31855 thermocouple
 #ifdef THERMO_USE
+// FIXME: to settings.h
 int thermoDO = 12;
 int thermoCS = 13;
 int thermoCLK = 14;
+//int thermoDO = D6;
+//int thermoCS = D8;
+//int thermoCLK = D5;
 MAX6675 thermo_max6675(thermoCLK, thermoCS, thermoDO);
 Adafruit_MAX31855 thermo_max31855(thermoCLK, thermoCS, thermoDO);
 uint8_t max6675_ok = 0;
@@ -312,7 +370,7 @@ void init_sensors() {
   init_bme680();
   init_bh1750();
   init_mlx90614();
-  init_apds9960();
+ // init_apds9960();
   init_si7021();
 #ifdef SDS011_USE  
   init_sds011();
@@ -322,6 +380,7 @@ void init_sensors() {
 #endif
   init_ds18b20();
 #ifdef THERMO_USE  
+// FIXME: init_max31855 finds 6675 also
   init_max31855();  // This must be fefore max6675
   init_max6675();
 #endif  
@@ -337,7 +396,7 @@ void read_sensors() {
   read_bme680();  
   read_bh1750();
   read_mlx90614();
-  read_apds9960();
+//  read_apds9960();
   read_si7021();
 #ifdef SDS011_USE  
   read_sds011();
@@ -375,8 +434,15 @@ void read_status() {
 #ifdef BUTTON_USE  
 void init_pushButton() {
   Serial.println(F("INIT Pushbutton "));
-  pinMode(PUSHBUTTON_1, INPUT);
-  pinMode(PUSHBUTTON_2, INPUT);
+#ifdef PUSHBUTTON_1
+  pinMode(PUSHBUTTON_1, INPUT_PULLUP);
+#endif
+#ifdef PUSHBUTTON_2
+  pinMode(PUSHBUTTON_2, INPUT_PULLUP);
+#endif
+#ifdef PUSHBUTTON_3
+  pinMode(PUSHBUTTON_3, INPUT_PULLUP);
+#endif
 }
 
 void read_pushButton() {
@@ -384,8 +450,15 @@ void read_pushButton() {
   //Serial.println("read_pushButton()");
   if ((millis() > (pushButton1_lastRead + PUSHBUTTON_SEND_DELAY))) {
     pushButton1_lastRead = millis();
+#ifdef PUSHBUTTON_1
     int buttonState1 = digitalRead(PUSHBUTTON_1);
+#endif
+#ifdef PUSHBUTTON_2
     int buttonState2 = digitalRead(PUSHBUTTON_2);
+#endif
+#ifdef PUSHBUTTON_3
+    int buttonState3 = digitalRead(PUSHBUTTON_3);
+#endif
     /*
     Serial.print("but 1 & 2: ");
     Serial.print(buttonState1);
@@ -396,13 +469,14 @@ void read_pushButton() {
     if (
         (millis() > (pushButton1_lastSend + SENSOR_SEND_MAX_DELAY)) || 
         (pushButton1_lastState != buttonState1 ||
-         pushButton2_lastState != buttonState2)
+         pushButton2_lastState != buttonState2 ||
+         pushButton3_lastState != buttonState3)
     ) {
       pushButton1_lastSend = millis();
       SendDataToNet("button", 
         "b1", buttonState1,
         "b2", buttonState2,
-        "", 0,
+        "b3", buttonState3,
         "", 0,
         -1
       );
@@ -410,6 +484,7 @@ void read_pushButton() {
     }
     pushButton1_lastState = buttonState1;
     pushButton2_lastState = buttonState2;
+    pushButton3_lastState = buttonState3;
   }
 }
 #endif
@@ -530,7 +605,8 @@ void read_bh1750() {
     uint16_t lux = bh1750.readLightLevel();
     if (
         ((bh1750_lastSend + SENSOR_SEND_MAX_DELAY) < millis()) ||
-        (log10_diff(bh1750_lastLux, lux) > 0.05)
+        ((log10_diff(bh1750_lastLux, lux) > 0.05) && 
+         (abs_diff(bh1750_lastLux, lux) >= 2))
     ) {  
       SendDataToNet("bh1750", 
         "lux", lux,
@@ -592,6 +668,7 @@ void read_mlx90614() {
  * NOTE: Arduino/libraries/SparkFun_APDS9960_RGB_and_Gesture_Sensor/src/SparkFun_APDS9960.h
  * conflicts with ESP8266WiFi and you must change NA_STATE --> N_A_STATE in SparkFun_APDS9960.h
  */
+/*
 void init_apds9960() {
   Serial.print(F("INIT APDS9960: "));
   bool init_ok = apds9960.init(); // For some reason this may return false
@@ -636,6 +713,7 @@ void read_apds9960() {
     }
   }
 }
+*/
 
 void init_si7021() {
   Serial.print(F("INIT Si7021: "));
@@ -767,7 +845,8 @@ void init_mhz19() {
   delay(7000); // Wait shortly to make sure MH-Z19 is responsive
   if (read_temp_co2(&mhz19_lastCO2, &mhz19_lastTemp)) {
     mhz19_ok = 1;
-    Serial.println(F("found"));
+    Serial.print(F("found. Value (PPM): "));
+    Serial.println(mhz19_lastCO2);
   } else {
     Serial.println(F("not found"));
   }
@@ -775,6 +854,8 @@ void init_mhz19() {
 
 void read_mhz19() {
   if ((mhz19_ok == 1) && (millis() > (mhz19_lastRead + MHZ19_SEND_DELAY))) {
+    mhz19.begin(9600);
+    delay(1000); // Wait shortly to make sure MH-Z19 is responsive
     mhz19_lastRead = millis();
     int CO2;
     int Temp;
@@ -800,6 +881,9 @@ void read_mhz19() {
         mhz19_lastCO2 = CO2;
         mhz19_lastTemp = Temp;
       }
+    } else {
+      Serial.println("MHZ19 read failed");
+      Serial.println(CO2);
     }
   }
 }
@@ -898,9 +982,10 @@ void read_max6675() {
 
 void init_max31855() {
   Serial.print(F("INIT max31855: "));
-  float temp = thermo_max31855.readInternal();
-  Serial.print(temp);
-  if (temp > -100.0 && temp <= 1350.0 && temp != 0) {
+  float temp_out = thermo_max31855.readCelsius();
+  float temp_in = thermo_max31855.readInternal();
+  Serial.print(temp_out);
+  if (temp_out > -100.0 && temp_out <= 1350.0 && temp_out != 0) {
     Serial.println(F(" found"));
     max31855_ok = 1;
     max6675_ok = 255;  // max6675 library detects max31855, so we disable init_max6675() here
