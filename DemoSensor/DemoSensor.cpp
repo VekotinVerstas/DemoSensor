@@ -45,6 +45,8 @@
 #include "SoftwareSerial.h"
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
+#include <SparkFun_APDS9960.h> // This must be before ESP8266WiFi, see
+// https://github.com/sparkfun/SparkFun_APDS-9960_Sensor_Arduino_Library/issues/11#issuecomment-403539336
 #include <ESP8266WiFi.h>
 #include <DNSServer.h>        // Local DNS Server used for redirecting all requests to the configuration portal
 #include <ESP8266WebServer.h> // Local WebServer used to serve the configuration portal
@@ -55,7 +57,6 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
 #include <Adafruit_BME680.h>
-// #include <SparkFun_APDS9960.h>
 #include <Adafruit_MLX90614.h>
 #include <SparkFun_Si7021_Breakout_Library.h> // https://github.com/sparkfun/Si7021_Breakout
 #ifdef SDS011_USE
@@ -135,6 +136,7 @@ String mac_str;
 String bssid_str;
 unsigned long lastMqttMsgTime;
 unsigned long mqttConnRetries = 0;
+char mqttTopic[128];
 
 /* Sensor variables */
 
@@ -180,7 +182,6 @@ float mlx90614_ambient_lastTemp = -273.15;
 float mlx90614_object_lastTemp = -273.15;
 
 // APDS9960 RGB and gesture sensor
-/*
 SparkFun_APDS9960 apds9960 = SparkFun_APDS9960();
 uint8_t apds9960_ok = 0;
 uint32_t apds9960_lastRead = 0;
@@ -189,7 +190,6 @@ uint32_t apds9960_lastR = -999;
 uint32_t apds9960_lastG = -999;
 uint32_t apds9960_lastB = -999;
 uint32_t apds9960_lastA = -999;
-*/
 
 // Si7021 temperature and humidity sensor
 Weather si7021;
@@ -309,10 +309,13 @@ void MqttSetup()
 
   if (client.connect((char *)clientName.c_str(), MQTT_USER, MQTT_PASSWORD))
   {
-
+    String mqttTopicStr = MQTT_TOPIC "/" + bssid_str + "/" + mac_str;
+    uint8_t str_len = mqttTopicStr.length() + 1;
+    char mac_char_array[str_len];
+    mqttTopicStr.toCharArray(mqttTopic, str_len);
     Serial.println("Connected to MQTT broker");
     Serial.print("Topic is: ");
-    Serial.println(MQTT_TOPIC);
+    Serial.println(mqttTopic);
     SendStartupToMQTT("version", DS_VERSION);
   }
   else
@@ -384,7 +387,7 @@ void init_sensors()
   init_bme680();
   init_bh1750();
   init_mlx90614();
-  // init_apds9960();
+  init_apds9960();
   init_si7021();
 #ifdef SDS011_USE
   init_sds011();
@@ -411,7 +414,7 @@ void read_sensors()
   read_bme680();
   read_bh1750();
   read_mlx90614();
-  //  read_apds9960();
+  read_apds9960();
   read_si7021();
 #ifdef SDS011_USE
   read_sds011();
@@ -709,27 +712,34 @@ void read_mlx90614()
 /*
  * NOTE: Arduino/libraries/SparkFun_APDS9960_RGB_and_Gesture_Sensor/src/SparkFun_APDS9960.h
  * conflicts with ESP8266WiFi and you must change NA_STATE --> N_A_STATE in SparkFun_APDS9960.h
+ * or include SparkFun_APDS9960 library first.
  */
-/*
-void init_apds9960() {
+void init_apds9960()
+{
   Serial.print(F("INIT APDS9960: "));
   bool init_ok = apds9960.init(); // For some reason this may return false
-  if (apds9960.enableLightSensor(false)) {
+  if (apds9960.enableLightSensor(false))
+  {
     Serial.println(F("found"));
-      apds9960_ok = 1;
-  } else {
+    apds9960_ok = 1;
+  }
+  else
+  {
     Serial.println(F("not found"));
   }
 }
 
-void read_apds9960() {
-  if ((apds9960_ok == 1) && (millis() > (apds9960_lastRead + APDS9960_SEND_DELAY))) {
+void read_apds9960()
+{
+  if ((apds9960_ok == 1) && (millis() > (apds9960_lastRead + APDS9960_SEND_DELAY)))
+  {
     apds9960_lastRead = millis();
     uint16_t r, g, b, a;
-    if (  !apds9960.readAmbientLight(a) ||
-          !apds9960.readRedLight(r) ||
-          !apds9960.readGreenLight(g) ||
-          !apds9960.readBlueLight(b) ) {
+    if (!apds9960.readAmbientLight(a) ||
+        !apds9960.readRedLight(r) ||
+        !apds9960.readGreenLight(g) ||
+        !apds9960.readBlueLight(b))
+    {
       Serial.println("Error reading light values");
       return;
     }
@@ -738,15 +748,14 @@ void read_apds9960() {
         (abs_diff(apds9960_lastR, r) > 1.0) ||
         (abs_diff(apds9960_lastG, g) > 1.0) ||
         (abs_diff(apds9960_lastB, b) > 1.0) ||
-        (abs_diff(apds9960_lastA, a) > 2.0)
-    ) {
+        (abs_diff(apds9960_lastA, a) > 2.0))
+    {
       SendDataToNet("apds9960",
-        "r", r,
-        "g", g,
-        "b", b,
-        "a", a,
-        -1
-      );
+                    "r", r,
+                    "g", g,
+                    "b", b,
+                    "a", a,
+                    -1);
       apds9960_lastSend = millis();
       apds9960_lastR = r;
       apds9960_lastG = g;
@@ -755,7 +764,6 @@ void read_apds9960() {
     }
   }
 }
-*/
 
 void init_si7021()
 {
@@ -1160,8 +1168,9 @@ void CreateJsonPayload(char *payload,
   DynamicJsonBuffer jsonBuffer(512);
   char jsonChar[256];
   JsonObject &root = jsonBuffer.createObject();
-  root["sensor"] = sensor;
-  root["mac"] = mac_str;
+  // TODO: remove, sensor and mac are part of mqtt topic now
+  // root["sensor"] = sensor;
+  // root["mac"] = mac_str;
   if (sn >= 0)
   {
     root["sn"] = sn;
@@ -1220,19 +1229,21 @@ void SendDataToNet(char const sensor[],
   Serial.print("Preparing to send: ");
   Serial.println(jsonChar);
 #ifdef MQTT_SERVER
-  msg_len = strlen(MQTT_TOPIC) + strlen(jsonChar);
+  char mqttTopicFinal[128];
+  sprintf(mqttTopicFinal, "%s/%s", mqttTopic, sensor);
+  msg_len = strlen(mqttTopicFinal) + strlen(jsonChar);
   Serial.print("MQTT ");
   Serial.print(round_float((millis() / 1000.0), 2));
   Serial.print("s ");
   Serial.print(msg_len);
   Serial.print("B ");
-  Serial.print(MQTT_TOPIC);
+  Serial.print(mqttTopicFinal);
   Serial.print(". ");
   if (msg_len > 120)
   {
     Serial.println("Warning: TOPIC + JSON > 120 bytes.");
   }
-  if (client.publish(MQTT_TOPIC, jsonChar))
+  if (client.publish(mqttTopicFinal, jsonChar))
   {
     lastMqttMsgTime = millis();
     Serial.println("Done.");
@@ -1261,19 +1272,21 @@ void SendStartupToMQTT(char const key1[], float val1)
                     "", 0,
                     "", 0,
                     -1);
-  msg_len = strlen(MQTT_TOPIC) + strlen(jsonChar);
+  char mqttTopicFinal[128];
+  sprintf(mqttTopicFinal, "%s/%s", mqttTopic, "status");
+  msg_len = strlen(mqttTopicFinal) + strlen(jsonChar);
   Serial.print(round_float((millis() / 1000.0), 2));
   Serial.print("s ");
   Serial.print(msg_len);
   Serial.print("B ");
-  Serial.print(MQTT_TOPIC);
+  Serial.print(mqttTopicFinal);
   Serial.print(" ");
   Serial.println(jsonChar);
   if (msg_len > 120)
   {
     Serial.println("Warning: TOPIC + JSON > 120 bytes.");
   }
-  if (client.publish(MQTT_TOPIC, jsonChar))
+  if (client.publish(mqttTopic, jsonChar))
   {
     lastMqttMsgTime = millis();
   }
